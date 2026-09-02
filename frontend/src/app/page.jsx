@@ -29,6 +29,7 @@ import {
   Globe2,
   Sliders,
   CheckCircle,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -122,24 +123,25 @@ export default function SatQueryProfessionalHome() {
           An autonomous agentic intelligence framework that routes satellite queries to specialized fine-tuned models for spatial visual question answering, change detection, and SAR radar fusion.
         </p>
 
-        {/* Primary Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3 sm:gap-4 pt-2 max-w-xs sm:max-w-none mx-auto">
+        {/* Primary Action Buttons (Redesigned & Renamed Professionally) */}
+        <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3.5 sm:gap-4 pt-2 max-w-xs sm:max-w-none mx-auto">
+          {/* Primary Action Button: Launch SatQuery Chat Studio */}
           <Link
             href="/chat"
-            className="px-7 py-3.5 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-2xl shadow-indigo-500/30 transition-all transform hover:scale-105 flex items-center justify-center gap-2.5 group"
+            className="px-7 py-3.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-extrabold text-xs sm:text-sm tracking-wide shadow-2xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3 group border border-slate-700/50 dark:border-white/20"
           >
-            <MessageSquare className="w-4.5 h-4.5 text-cyan-300" />
-            <span>Launch Satellite AI Chat</span>
-            <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
-              <ArrowRight className="w-3 h-3 text-white" />
-            </div>
+            <Sparkles className="w-4 h-4 text-cyan-400 dark:text-violet-600" />
+            <span>Launch SatQuery Chat Studio</span>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
 
+          {/* Secondary Action Button: View Architecture Docs */}
           <Link
             href="/agent-flow"
-            className="px-7 py-3.5 rounded-full bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs sm:text-sm tracking-wide shadow-xl border border-slate-300 transition-all flex items-center justify-center gap-2"
+            className="px-7 py-3.5 rounded-full bg-white dark:bg-[#141628] hover:bg-slate-100 dark:hover:bg-[#1c1f36] text-slate-900 dark:text-slate-100 font-extrabold text-xs sm:text-sm tracking-wide shadow-lg border border-slate-300 dark:border-violet-500/30 transition-all flex items-center justify-center gap-2"
           >
-            <span>Explore Documentation</span>
+            <BookOpen className="w-4 h-4 text-slate-500 dark:text-violet-400" />
+            <span>View Architecture Docs</span>
           </Link>
         </div>
       </div>

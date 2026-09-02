@@ -58,7 +58,7 @@ export function SuperhumanHeader({ theme = "dark", onToggleTheme }) {
 
       {/* Main Clean Minimalist Documentation Navbar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-6">
-        {/* Clean Text Brand: SatQuery AI (No Icon, No Docs) */}
+        {/* Clean Text Brand: SatQuery AI */}
         <Link href="/" className="flex items-center shrink-0 group">
           <span className={`font-extrabold text-2xl tracking-tight whitespace-nowrap ${isDark ? "text-white" : "text-slate-900"}`}>
             SatQuery <span className="text-violet-500 font-extrabold">AI</span>
@@ -101,14 +101,14 @@ export function SuperhumanHeader({ theme = "dark", onToggleTheme }) {
             {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {/* Documentation CTA Pill */}
+          {/* Documentation CTA Pill (Redesigned & Renamed Professionally) */}
           <Link
             href="/agent-flow"
-            className="px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap group"
+            className="px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-extrabold text-xs sm:text-sm tracking-wide shadow-lg hover:bg-slate-800 dark:hover:bg-slate-100 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap group border border-slate-700/50 dark:border-white/20"
           >
-            <span>Explore Docs</span>
-            <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
-              <ArrowRight className="w-3 h-3 text-white" />
+            <span>Architecture Docs</span>
+            <div className="w-4 h-4 rounded-full bg-white/20 dark:bg-slate-900/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
+              <ArrowRight className="w-3 h-3 text-white dark:text-slate-950" />
             </div>
           </Link>
 
