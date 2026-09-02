@@ -41,6 +41,7 @@ import {
   ThumbsDown,
   Share2,
   MoreHorizontal,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
@@ -284,7 +285,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with STRICT API response box parsing (0 fallback boxes)
+  // Execute query with STRICT API response box parsing
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -321,10 +322,7 @@ export default function SatQueryDeepSeekChatPage() {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
       
-      // Parse raw GeoChat coordinate tokens ONLY if returned by API
       const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer);
-
-      // Strict API returned boxes array ONLY
       const finalBoxes = [...(backendData.boxes || []), ...parsedBoxes];
 
       let cleanAnswerText = cleanHtmlResponse(cleanText || rawAnswer);
@@ -344,7 +342,7 @@ export default function SatQueryDeepSeekChatPage() {
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
         text: cleanAnswerText,
-        boxes: finalBoxes, // Strictly API returned boxes
+        boxes: finalBoxes,
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
       };
@@ -356,12 +354,30 @@ export default function SatQueryDeepSeekChatPage() {
         model: "SatQuery Agent Controller",
         task: "ERROR",
         isError: true,
-        text: cleanHtmlResponse(apiRes.error) || "SatQuery AI backend is currently unavailable. Please try again.",
+        text: cleanHtmlResponse(apiRes.error) || "Failed to fetch backend response. Please try again.",
       };
       setMessages((prev) => [...prev, errorMsg]);
     }
 
     setIsGenerating(false);
+  };
+
+  // Retry query handler for Try Again button
+  const handleRetryMessage = (errorOrAssistantMsg) => {
+    const msgIdx = messages.findIndex((m) => m.id === errorOrAssistantMsg.id);
+    let targetQuery = "";
+    let targetImage = null;
+
+    if (msgIdx > 0 && messages[msgIdx - 1].sender === "user") {
+      targetQuery = messages[msgIdx - 1].text;
+      targetImage = messages[msgIdx - 1].image;
+    } else {
+      targetQuery = inputQuery || "Analyze satellite imagery.";
+    }
+
+    // Remove failed message and re-execute query
+    setMessages((prev) => prev.filter((m) => m.id !== errorOrAssistantMsg.id));
+    executeQuery(targetQuery, null, targetImage);
   };
 
   const handleSendMessage = () => {
@@ -811,8 +827,19 @@ export default function SatQueryDeepSeekChatPage() {
                 {msg.sender === "assistant" && (
                   <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl">
                     {msg.isError ? (
-                      <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-sm font-medium">
-                        {msg.text}
+                      /* Error Bubble with Try Again Button */
+                      <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-sm font-medium flex items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                          <span>{msg.text}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRetryMessage(msg)}
+                          className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Try Again</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="space-y-3 w-full">
@@ -912,7 +939,7 @@ export default function SatQueryDeepSeekChatPage() {
                           <button title="Thumbs Down" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                             <ThumbsDown className="w-4 h-4" />
                           </button>
-                          <button title="Regenerate" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                          <button onClick={() => handleRetryMessage(msg)} title="Try Again / Regenerate" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                             <RotateCcw className="w-4 h-4" />
                           </button>
                           <button title="Share" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
