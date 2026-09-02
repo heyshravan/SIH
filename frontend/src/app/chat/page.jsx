@@ -32,12 +32,12 @@ import {
   Sun,
   Moon,
   Home,
+  Menu,
 } from "lucide-react";
 import Link from "next/link";
 
 export default function SatQueryDeepSeekChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  // Default theme set to "light"
   const [theme, setTheme] = useState("light");
   const [mode, setMode] = useState("expert"); // instant, expert, vision
   const [agentThink, setAgentThink] = useState(true);
@@ -50,6 +50,11 @@ export default function SatQueryDeepSeekChatPage() {
   const [activeChatId, setActiveChatId] = useState("chat-1");
 
   useEffect(() => {
+    // Auto-detect mobile screen size on mount and collapse sidebar if on small screen
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+
     const isDarkClass = document.documentElement.classList.contains("dark");
     setTheme(isDarkClass ? "dark" : "light");
   }, []);
@@ -197,7 +202,7 @@ export default function SatQueryDeepSeekChatPage() {
   };
 
   return (
-    <div className={`flex h-screen w-full overflow-hidden select-none transition-colors duration-300 ${
+    <div className={`flex h-screen w-full overflow-hidden select-none transition-colors duration-300 relative ${
       isDark ? "bg-[#070810] text-slate-100" : "bg-slate-50 text-slate-900"
     }`}>
       {/* Hidden File Input */}
@@ -209,20 +214,28 @@ export default function SatQueryDeepSeekChatPage() {
         className="hidden"
       />
 
-      {/* Left Collapsible Sidebar */}
+      {/* Mobile Drawer Backdrop overlay */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/60 z-30 backdrop-blur-xs"
+        />
+      )}
+
+      {/* Left Collapsible Sidebar (Fully Responsive for All Devices) */}
       <aside
         className={`${
-          sidebarOpen ? "w-64" : "w-16"
+          sidebarOpen ? "w-64 translate-x-0" : "-translate-x-full md:translate-x-0 md:w-16"
         } transition-all duration-300 flex flex-col border-r ${
           isDark
             ? "bg-[#0c0d18] border-white/10 text-slate-100"
             : "bg-white border-slate-200 text-slate-900 shadow-xl"
-        } relative shrink-0 z-20`}
+        } fixed md:static inset-y-0 left-0 z-40 shrink-0`}
       >
-        {/* Toggle Collapse Button */}
+        {/* Toggle Collapse Button (Desktop) */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute -right-3 top-6 w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-lg border border-violet-400 z-30 hover:scale-110 transition-transform"
+          className="hidden md:flex absolute -right-3 top-6 w-6 h-6 rounded-full bg-violet-600 text-white items-center justify-center shadow-lg border border-violet-400 z-30 hover:scale-110 transition-transform"
         >
           {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
@@ -241,12 +254,23 @@ export default function SatQueryDeepSeekChatPage() {
               </span>
             )}
           </Link>
+
+          {/* Close button for Mobile Drawer */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-1 rounded-lg text-slate-400 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Top + New Chat Button */}
         <div className="p-3">
           <button
-            onClick={handleNewChat}
+            onClick={() => {
+              handleNewChat();
+              if (window.innerWidth < 768) setSidebarOpen(false);
+            }}
             className={`w-full py-3 px-3 rounded-xl border flex items-center gap-2.5 font-extrabold text-xs tracking-wide transition-all shadow-md ${
               sidebarOpen ? "justify-start" : "justify-center px-0"
             } ${
@@ -279,7 +303,10 @@ export default function SatQueryDeepSeekChatPage() {
                       return (
                         <button
                           key={h.id}
-                          onClick={() => setActiveChatId(h.id)}
+                          onClick={() => {
+                            setActiveChatId(h.id);
+                            if (window.innerWidth < 768) setSidebarOpen(false);
+                          }}
                           className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold truncate transition-all flex items-center gap-2.5 ${
                             isActive
                               ? isDark
@@ -383,15 +410,41 @@ export default function SatQueryDeepSeekChatPage() {
       </aside>
 
       {/* Right Main Workspace */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto p-4 sm:p-6 space-y-6 relative">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto p-3 sm:p-6 space-y-6 relative">
+        {/* Mobile Header Bar with Hamburger Button */}
+        <div className="md:hidden flex items-center justify-between pb-3 border-b dark:border-white/10 border-slate-200">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-xl border dark:bg-white/10 dark:border-white/20 bg-white border-slate-300 text-slate-800 dark:text-white shadow-sm"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shadow">
+              <Satellite className="w-3.5 h-3.5" />
+            </div>
+            <span className="font-extrabold text-sm tracking-tight dark:text-white text-slate-900">
+              SatQuery <span className="text-violet-500 font-mono text-xs">AI</span>
+            </span>
+          </Link>
+
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-xl border dark:bg-white/10 dark:border-white/20 bg-white border-slate-300 text-slate-800 dark:text-white shadow-sm"
+          >
+            {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+          </button>
+        </div>
+
         {/* Welcome Empty State Header */}
         {messages.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 py-12">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40">
-              <Satellite className="w-8 h-8 animate-pulse" />
+          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 py-6 sm:py-12 px-2">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40">
+              <Satellite className="w-7 h-7 sm:w-8 sm:h-8 animate-pulse" />
             </div>
 
-            <h2 className={`text-3xl sm:text-4xl font-extrabold tracking-tight font-sans ${
+            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight font-sans ${
               isDark ? "text-white" : "text-slate-900"
             }`}>
               What satellite analysis can I help with today?
@@ -403,43 +456,43 @@ export default function SatQueryDeepSeekChatPage() {
             }`}>
               <button
                 onClick={() => setMode("instant")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
                   mode === "instant"
                     ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Zap className="w-4 h-4 text-amber-400" />
+                <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                 <span>Instant</span>
               </button>
 
               <button
                 onClick={() => setMode("expert")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
                   mode === "expert"
                     ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Brain className="w-4 h-4 text-violet-400" />
+                <Brain className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-violet-400" />
                 <span>Expert</span>
               </button>
 
               <button
                 onClick={() => setMode("vision")}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
                   mode === "vision"
                     ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Eye className="w-4 h-4 text-cyan-400" />
+                <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
                 <span>Vision</span>
               </button>
             </div>
 
             {/* Presets Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full pt-2 sm:pt-4">
               {presetSamples.map((s, idx) => (
                 <button
                   key={idx}
@@ -447,7 +500,7 @@ export default function SatQueryDeepSeekChatPage() {
                     setInputQuery(s.query);
                     setAttachedImage({ name: s.name, url: s.image });
                   }}
-                  className={`p-4 rounded-2xl border text-left text-xs font-extrabold transition-all hover:scale-102 flex items-center justify-between shadow-lg ${
+                  className={`p-3.5 sm:p-4 rounded-2xl border text-left text-xs font-extrabold transition-all hover:scale-102 flex items-center justify-between shadow-lg ${
                     isDark
                       ? "bg-[#141628] hover:bg-[#1e213b] border-violet-500/30 text-white"
                       : "bg-white hover:bg-slate-100 border-slate-300 text-slate-900"
@@ -463,7 +516,7 @@ export default function SatQueryDeepSeekChatPage() {
 
         {/* Messages Thread */}
         {messages.length > 0 && (
-          <div className="flex-1 space-y-6 max-w-4xl mx-auto w-full">
+          <div className="flex-1 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
             {/* Mode Switcher Banner */}
             <div className="flex justify-center pb-2">
               <div className={`flex items-center p-1 rounded-full border shadow-md ${
@@ -471,7 +524,7 @@ export default function SatQueryDeepSeekChatPage() {
               }`}>
                 <button
                   onClick={() => setMode("instant")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold transition-all ${
                     mode === "instant"
                       ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
                       : isDark ? "text-slate-300" : "text-slate-600"
@@ -482,7 +535,7 @@ export default function SatQueryDeepSeekChatPage() {
                 </button>
                 <button
                   onClick={() => setMode("expert")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold transition-all ${
                     mode === "expert"
                       ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
                       : isDark ? "text-slate-300" : "text-slate-600"
@@ -493,7 +546,7 @@ export default function SatQueryDeepSeekChatPage() {
                 </button>
                 <button
                   onClick={() => setMode("vision")}
-                  className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold transition-all ${
                     mode === "vision"
                       ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
                       : isDark ? "text-slate-300" : "text-slate-600"
@@ -509,7 +562,7 @@ export default function SatQueryDeepSeekChatPage() {
               <div key={msg.id} className="space-y-3">
                 {msg.sender === "user" && (
                   <div className="flex justify-end">
-                    <div className="max-w-xl border rounded-3xl p-4.5 text-sm font-semibold space-y-3 shadow-lg bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 text-white">
+                    <div className="max-w-xl border rounded-3xl p-3.5 sm:p-4.5 text-xs sm:text-sm font-semibold space-y-3 shadow-lg bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 text-white">
                       {msg.image && (
                         <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20">
                           <img src={msg.image} alt="Input" className="w-full h-36 object-cover" />
@@ -524,7 +577,7 @@ export default function SatQueryDeepSeekChatPage() {
                 )}
 
                 {msg.sender === "assistant" && (
-                  <div className={`rounded-3xl border p-6 space-y-4 shadow-xl ${
+                  <div className={`rounded-3xl border p-4 sm:p-6 space-y-4 shadow-xl ${
                     isDark
                       ? "bg-[#141628] border-violet-500/30 text-white"
                       : "bg-white border-slate-300 text-slate-900"
@@ -540,7 +593,7 @@ export default function SatQueryDeepSeekChatPage() {
                     </div>
 
                     {msg.thinking && (
-                      <div className={`p-4 rounded-2xl border text-xs font-mono space-y-2 ${
+                      <div className={`p-3.5 sm:p-4 rounded-2xl border text-xs font-mono space-y-2 ${
                         isDark
                           ? "bg-black/40 border-white/10 text-slate-200"
                           : "bg-slate-100 border-slate-300 text-slate-800"
@@ -553,7 +606,7 @@ export default function SatQueryDeepSeekChatPage() {
                       </div>
                     )}
 
-                    <p className={`text-sm leading-relaxed font-semibold p-4 rounded-2xl border ${
+                    <p className={`text-xs sm:text-sm leading-relaxed font-semibold p-3.5 sm:p-4 rounded-2xl border ${
                       isDark
                         ? "bg-white/5 border-white/10 text-slate-100"
                         : "bg-slate-50 border-slate-200 text-slate-900"
@@ -627,7 +680,7 @@ export default function SatQueryDeepSeekChatPage() {
           )}
 
           {/* DeepSeek Floating Textarea Container */}
-          <div className={`rounded-3xl p-4 shadow-2xl border transition-colors space-y-3 ${
+          <div className={`rounded-3xl p-3 sm:p-4 shadow-2xl border transition-colors space-y-3 ${
             isDark
               ? "bg-[#141628] border-violet-500/40 text-white"
               : "bg-white border-slate-300 text-slate-900"
@@ -643,59 +696,59 @@ export default function SatQueryDeepSeekChatPage() {
                 }
               }}
               placeholder="Message SatQuery AI (e.g. 'Ground all ships in Visakhapatnam port', 'Compare T1 vs T2 change')..."
-              className="w-full bg-transparent text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
+              className="w-full bg-transparent text-xs sm:text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
             />
 
-            {/* Bottom Input Action Controls: [ AgentThink ] [ Earth Search ] ... [+] 📎 [ Send ↑ ] */}
-            <div className="flex items-center justify-between pt-2 border-t dark:border-white/10 border-slate-200">
-              <div className="flex items-center gap-2">
+            {/* Bottom Input Action Controls */}
+            <div className="flex items-center justify-between pt-2 border-t dark:border-white/10 border-slate-200 gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setAgentThink(!agentThink)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all ${
                     agentThink
                       ? "bg-violet-600/30 text-violet-600 dark:text-violet-300 border border-violet-500/40"
                       : "dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-transparent"
                   }`}
                 >
-                  <Brain className="w-4 h-4 text-violet-500" />
+                  <Brain className="w-3.5 h-3.5 text-violet-500" />
                   <span>AgentThink</span>
                 </button>
 
                 <button
                   onClick={() => setEarthSearch(!earthSearch)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all ${
                     earthSearch
                       ? "bg-cyan-600/30 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
                       : "dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-transparent"
                   }`}
                 >
-                  <Globe className="w-4 h-4 text-cyan-500" />
+                  <Globe className="w-3.5 h-3.5 text-cyan-500" />
                   <span>Earth Search</span>
                 </button>
               </div>
 
               {/* Action Buttons: (+) Plus Add Symbol, (📎) Paperclip Attachment, (↑) Send Arrow */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   title="Add Satellite Imagery / Patch (+)"
-                  className="w-9 h-9 rounded-full border dark:bg-white/10 dark:hover:bg-white/20 dark:border-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 flex items-center justify-center transition-colors shadow-sm"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border dark:bg-white/10 dark:hover:bg-white/20 dark:border-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 flex items-center justify-center transition-colors shadow-sm"
                 >
-                  <Plus className="w-4.5 h-4.5 text-cyan-500 dark:text-cyan-400 stroke-[3]" />
+                  <Plus className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-cyan-500 dark:text-cyan-400 stroke-[3]" />
                 </button>
 
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   title="Attach File"
-                  className="w-9 h-9 rounded-full dark:bg-white/10 dark:hover:bg-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full dark:bg-white/10 dark:hover:bg-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
                 >
-                  <Paperclip className="w-4.5 h-4.5" />
+                  <Paperclip className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </button>
 
                 <button
                   onClick={handleSendMessage}
                   disabled={isGenerating || (!inputQuery.trim() && !attachedImage)}
-                  className="w-9 h-9 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-40"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-40"
                 >
                   {isGenerating ? (
                     <Sparkles className="w-4 h-4 animate-spin" />
