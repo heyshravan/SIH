@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Satellite,
   ArrowRight,
   Sun,
   Moon,
@@ -59,17 +58,14 @@ export function SuperhumanHeader({ theme = "dark", onToggleTheme }) {
 
       {/* Main Clean Minimalist Documentation Navbar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-6">
-        {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
-            <Satellite className="w-5 h-5" />
-          </div>
-          <span className={`font-extrabold text-xl tracking-tight whitespace-nowrap ${isDark ? "text-white" : "text-slate-900"}`}>
-            SatQuery <span className="text-violet-500 font-mono text-sm font-bold">Docs</span>
+        {/* Clean Text Brand: SatQuery AI (No Icon, No Docs) */}
+        <Link href="/" className="flex items-center shrink-0 group">
+          <span className={`font-extrabold text-2xl tracking-tight whitespace-nowrap ${isDark ? "text-white" : "text-slate-900"}`}>
+            SatQuery <span className="text-violet-500 font-extrabold">AI</span>
           </span>
         </Link>
 
-        {/* Desktop Documentation Nav Links (Increased Font Size text-sm sm:text-base) */}
+        {/* Desktop Documentation Nav Links */}
         <nav className="hidden md:flex items-center gap-8 text-sm sm:text-base font-extrabold tracking-wide">
           {navLinks.map((item) => {
             const isActive = pathname === item.href;
@@ -105,7 +101,7 @@ export function SuperhumanHeader({ theme = "dark", onToggleTheme }) {
             {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {/* Documentation CTA Pill (Increased Font Size text-sm) */}
+          {/* Documentation CTA Pill */}
           <Link
             href="/agent-flow"
             className="px-5 py-2.5 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 whitespace-nowrap group"
