@@ -45,6 +45,10 @@ import {
   Square,
   StopCircle,
   RefreshCw,
+  Ship,
+  Building2,
+  Sparkle,
+  ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
@@ -80,34 +84,46 @@ function ChatContent() {
   const [messages, setMessages] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Specialized Remote Sensing Topics
+  // Premium Specialized Remote Sensing Topics
   const presetSamples = [
     {
       id: "grounding",
-      name: "🚢 Ground Harbor Vessels",
+      name: "Ground Harbor Vessels",
+      desc: "GeoChat-7B spatial bounding box localization & port tracking.",
       query: "Locate all cargo ships and harbor buildings in this satellite patch.",
+      icon: Ship,
+      color: "from-blue-500 to-cyan-500",
       taskType: "grounding",
       mode: "vision",
     },
     {
       id: "change",
-      name: "🔄 Bi-Temporal Urban Change",
+      name: "Bi-Temporal Urban Change",
+      desc: "Compare T1 vs T2 satellite imagery for new construction detection.",
       query: "Compare T1 vs T2 imagery to detect new infrastructure constructions.",
+      icon: GitMerge,
+      color: "from-indigo-500 to-violet-500",
       taskType: "change",
       mode: "expert",
       isChange: true,
     },
     {
       id: "fusion",
-      name: "🛰️ Optical + SAR Fusion",
+      name: "Optical + SAR Fusion",
+      desc: "Fuse Sentinel-1 C-band radar with Sentinel-2 optical bands.",
       query: "Fuse Sentinel-1 C-band radar with Sentinel-2 optical bands to penetrate cloud cover.",
+      icon: Layers,
+      color: "from-violet-500 to-fuchsia-500",
       taskType: "fusion",
       mode: "expert",
     },
     {
       id: "vrsbench",
-      name: "📊 VRSBench Benchmark",
+      name: "VRSBench Benchmark",
+      desc: "Run multi-modal evaluation on VRSBench VQA test split.",
       query: "Run evaluation on VRSBench VQA and spatial grounding test split.",
+      icon: BarChart3,
+      color: "from-emerald-500 to-teal-500",
       taskType: "vqa",
       mode: "expert",
     },
@@ -784,24 +800,31 @@ function ChatContent() {
           </button>
         </div>
 
-        {/* Welcome Empty State Header */}
+        {/* Welcome Empty State Header (Ultra-Premium Redesign) */}
         {messages.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 py-6 sm:py-12 px-2">
-            <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight font-sans ${
-              isDark ? "text-white" : "text-slate-900"
-            }`}>
+          <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto text-center space-y-7 py-8 sm:py-14 px-3">
+            {/* Top Pill Badge */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border dark:bg-violet-950/40 dark:border-violet-500/30 bg-violet-50 border-violet-200 text-violet-700 dark:text-violet-300 text-xs font-semibold shadow-inner">
+              <Sparkles className="w-3.5 h-3.5 text-violet-500 animate-pulse" />
+              <span>SatQuery AI v2.5 • Agentic Remote Sensing Intelligence</span>
+            </div>
+
+            {/* Glowing Gradient Heading */}
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tight font-sans bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-indigo-950 to-violet-800 dark:from-white dark:via-slate-100 dark:to-cyan-300 leading-tight">
               What satellite analysis can I help with today?
             </h2>
 
-            {/* Segmented Mode Switcher Pill */}
-            <div className={`flex items-center p-1 rounded-full border shadow-xl ${
-              isDark ? "bg-[#141628] border-violet-500/30" : "bg-white border-slate-300"
+            {/* Glassmorphic Segmented Mode Switcher Pill */}
+            <div className={`flex items-center p-1.5 rounded-full border shadow-2xl backdrop-blur-md ${
+              isDark
+                ? "bg-[#121324]/90 border-violet-500/30 shadow-indigo-950/50"
+                : "bg-white/90 border-slate-200/80 shadow-slate-200"
             }`}>
               <button
                 onClick={() => setMode("instant")}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-xs font-extrabold transition-all duration-300 ${
                   mode === "instant"
-                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 scale-102"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -811,9 +834,9 @@ function ChatContent() {
 
               <button
                 onClick={() => setMode("expert")}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-xs font-extrabold transition-all duration-300 ${
                   mode === "expert"
-                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 scale-102"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -823,9 +846,9 @@ function ChatContent() {
 
               <button
                 onClick={() => setMode("vision")}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-extrabold transition-all ${
+                className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full text-xs font-extrabold transition-all duration-300 ${
                   mode === "vision"
-                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md"
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 scale-102"
                     : isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -834,22 +857,37 @@ function ChatContent() {
               </button>
             </div>
 
-            {/* Presets Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full pt-2 sm:pt-4">
-              {presetSamples.map((s, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handlePresetClick(s)}
-                  className={`p-3.5 sm:p-4 rounded-2xl border text-left text-xs font-extrabold transition-all hover:scale-102 flex items-center justify-between shadow-lg ${
-                    isDark
-                      ? "bg-[#141628] hover:bg-[#1e213b] border-violet-500/30 text-white"
-                      : "bg-white hover:bg-slate-100 border-slate-300 text-slate-900"
-                  }`}
-                >
-                  <span className="truncate">{s.name}</span>
-                  <ArrowUp className="w-4 h-4 text-violet-500 rotate-45 shrink-0 stroke-[3]" />
-                </button>
-              ))}
+            {/* Presets Card Grid (Redesigned with Icons & Descriptions) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full pt-3">
+              {presetSamples.map((s, idx) => {
+                const IconComponent = s.icon;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handlePresetClick(s)}
+                    className={`group p-4 rounded-2xl border text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between space-y-3 relative overflow-hidden ${
+                      isDark
+                        ? "bg-[#121428] hover:bg-[#181a36] border-violet-500/25 text-white hover:border-violet-500/60 shadow-indigo-950/30"
+                        : "bg-white hover:bg-slate-50 border-slate-200 text-slate-900 shadow-lg hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between w-full">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${s.color} flex items-center justify-center text-white shadow-md shrink-0 group-hover:scale-110 transition-transform`}>
+                          <IconComponent className="w-4.5 h-4.5" />
+                        </div>
+                        <span className="font-extrabold text-sm tracking-tight">{s.name}</span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-violet-500 group-hover:translate-x-1 transition-all shrink-0" />
+                    </div>
+                    <p className={`text-xs leading-relaxed font-normal text-left ${
+                      isDark ? "text-slate-400" : "text-slate-500"
+                    }`}>
+                      {s.desc}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
