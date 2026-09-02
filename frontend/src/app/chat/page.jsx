@@ -37,6 +37,10 @@ import {
   Activity,
   ClipboardCheck,
   Trash2,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  MoreHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, fetchHealthStatus } from "@/lib/api";
@@ -116,7 +120,6 @@ export default function SatQueryDeepSeekChatPage() {
     if (!isInitialized) return;
 
     try {
-      // Update title if first message exists
       const updatedHistories = chatHistories.map((h) => {
         if (h.id === activeChatId) {
           let updatedTitle = h.title;
@@ -211,14 +214,13 @@ export default function SatQueryDeepSeekChatPage() {
     if (file) {
       const imageUrl = URL.createObjectURL(file);
       setAttachedImage({
-        file: file, // Store File object for FormData
+        file: file,
         name: file.name,
         url: imageUrl,
       });
     }
   };
 
-  // Switch Active Chat Session
   const handleSwitchChat = (chatId) => {
     setActiveChatId(chatId);
     const targetSession = chatHistories.find((s) => s.id === chatId);
@@ -227,7 +229,6 @@ export default function SatQueryDeepSeekChatPage() {
     setAttachedImage(null);
   };
 
-  // Start New Chat Session
   const handleNewChat = () => {
     const newId = `chat-${Date.now()}`;
     const newSession = {
@@ -250,7 +251,6 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Delete Chat Session
   const handleDeleteChat = (e, chatId) => {
     e.stopPropagation();
     const updated = chatHistories.filter((h) => h.id !== chatId);
@@ -699,7 +699,7 @@ export default function SatQueryDeepSeekChatPage() {
           </div>
         )}
 
-        {/* Messages Thread */}
+        {/* Messages Thread (Styling Matching User Screenshots 2 & 3) */}
         {messages.length > 0 && (
           <div className="flex-1 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
             {/* Mode Switcher Banner */}
@@ -745,11 +745,12 @@ export default function SatQueryDeepSeekChatPage() {
 
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-3">
+                {/* User Message Bubble: Rounded Blue Pill on Right (Matching Screenshot 2 & 3) */}
                 {msg.sender === "user" && (
-                  <div className="flex justify-end">
-                    <div className="max-w-xl border rounded-3xl p-3.5 sm:p-4.5 text-xs sm:text-sm font-semibold space-y-3 shadow-lg bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 text-white">
+                  <div className="flex justify-end my-3">
+                    <div className="max-w-xl bg-[#0055ff] dark:bg-[#1d4ed8] text-white px-5 py-2.5 rounded-3xl text-sm font-semibold shadow-md space-y-2">
                       {msg.image && (
-                        <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20">
+                        <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
                           <img src={msg.image} alt="Input" className="w-full h-36 object-cover" />
                           <div className="bg-black/40 px-3 py-1 text-[11px] font-mono text-cyan-200 truncate font-bold">
                             📎 {msg.imageName || "Satellite Patch Input"}
@@ -761,82 +762,94 @@ export default function SatQueryDeepSeekChatPage() {
                   </div>
                 )}
 
+                {/* Assistant Response Layout: Plain Clean Text on Left + Action Icons (Matching Screenshot 3) */}
                 {msg.sender === "assistant" && (
-                  <div className={`rounded-3xl border p-4 sm:p-6 space-y-4 shadow-xl ${
-                    msg.isError
-                      ? "bg-rose-500/10 border-rose-500/40 text-rose-900 dark:text-rose-200"
-                      : isDark
-                      ? "bg-[#141628] border-violet-500/30 text-white"
-                      : "bg-white border-slate-300 text-slate-900"
-                  }`}>
-                    <div className="flex items-center justify-between border-b dark:border-white/10 border-slate-200 pb-4 flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={msg.isError ? "danger" : "indigo"}>{msg.model}</Badge>
-                        {msg.confidence && <Badge variant="success">{msg.confidence}% Confidence</Badge>}
+                  <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl">
+                    {msg.isError ? (
+                      <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-sm font-medium">
+                        {msg.text}
                       </div>
-                      <span className="text-xs font-mono font-bold text-cyan-600 dark:text-cyan-400">
-                        {msg.task}
-                      </span>
-                    </div>
+                    ) : (
+                      <div className="space-y-3 w-full">
+                        {/* Model / Task Tag */}
+                        <div className="flex items-center gap-2 text-xs font-mono font-bold">
+                          <Badge variant="indigo">{msg.model}</Badge>
+                          <span className="text-cyan-600 dark:text-cyan-400">{msg.task}</span>
+                        </div>
 
-                    {msg.thinking && (
-                      <div className={`p-3.5 sm:p-4 rounded-2xl border text-xs font-mono space-y-2 ${
-                        isDark
-                          ? "bg-black/40 border-white/10 text-slate-200"
-                          : "bg-slate-100 border-slate-300 text-slate-800"
-                      }`}>
-                        <p className="text-violet-600 dark:text-violet-300 font-extrabold flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-violet-500" />
-                          Agent Controller Reasoning
-                        </p>
-                        <pre className="whitespace-pre-wrap leading-relaxed font-semibold">{msg.thinking}</pre>
-                      </div>
-                    )}
+                        {/* Reasoning Log */}
+                        {msg.thinking && (
+                          <div className={`p-3.5 rounded-2xl border text-xs font-mono space-y-1.5 ${
+                            isDark ? "bg-black/40 border-white/10 text-slate-300" : "bg-slate-100 border-slate-200 text-slate-700"
+                          }`}>
+                            <p className="text-violet-500 font-extrabold flex items-center gap-2">
+                              <Brain className="w-4 h-4" /> Agent Controller Reasoning
+                            </p>
+                            <pre className="whitespace-pre-wrap leading-relaxed">{msg.thinking}</pre>
+                          </div>
+                        )}
 
-                    <p className={`text-xs sm:text-sm leading-relaxed font-semibold p-3.5 sm:p-4 rounded-2xl border ${
-                      msg.isError
-                        ? "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-200"
-                        : isDark
-                        ? "bg-white/5 border-white/10 text-slate-100"
-                        : "bg-slate-50 border-slate-200 text-slate-900"
-                    }`}>
-                      {msg.text}
-                    </p>
+                        {/* Plain Clean Assistant Answer Text (Matching Screenshot 3) */}
+                        <div className={`text-sm sm:text-base leading-relaxed font-normal ${
+                          isDark ? "text-slate-100" : "text-slate-900"
+                        }`}>
+                          {msg.text}
+                        </div>
 
-                    {msg.boxes && msg.boxes.length > 0 && (
-                      <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md dark:border-white/15 border-slate-300">
-                        <img src={msg.resultImage} alt="Satellite Output" className="w-full h-full object-cover" />
+                        {/* Bounding Boxes Output if present */}
+                        {msg.boxes && msg.boxes.length > 0 && (
+                          <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
+                            <img src={msg.resultImage} alt="Output" className="w-full h-full object-cover" />
+                            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                              {msg.boxes.map((box, bIdx) => (
+                                <g key={bIdx}>
+                                  <rect
+                                    x={`${(box.x / 600) * 100}%`}
+                                    y={`${(box.y / 400) * 100}%`}
+                                    width={`${(box.width / 600) * 100}%`}
+                                    height={`${(box.height / 400) * 100}%`}
+                                    fill="rgba(139, 92, 246, 0.25)"
+                                    stroke="#a78bfa"
+                                    strokeWidth="2.5"
+                                    strokeDasharray="4 2"
+                                  />
+                                  <foreignObject
+                                    x={`${(box.x / 600) * 100}%`}
+                                    y={`${Math.max(0, (box.y / 400) * 100 - 8)}%`}
+                                    width="120"
+                                    height="30"
+                                  >
+                                    <div className="bg-violet-950/90 text-violet-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-400/50 inline-flex items-center gap-1 shadow-lg">
+                                      <span>{box.label}</span>
+                                      <span className="text-cyan-300 font-bold">{box.score}</span>
+                                    </div>
+                                  </foreignObject>
+                                </g>
+                              ))}
+                            </svg>
+                          </div>
+                        )}
 
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                          {msg.boxes.map((box, bIdx) => (
-                            <g key={bIdx}>
-                              <rect
-                                x={`${(box.x / 600) * 100}%`}
-                                y={`${(box.y / 400) * 100}%`}
-                                width={`${(box.width / 600) * 100}%`}
-                                height={`${(box.height / 400) * 100}%`}
-                                fill="rgba(139, 92, 246, 0.25)"
-                                stroke="#a78bfa"
-                                strokeWidth="2.5"
-                                strokeDasharray="4 2"
-                              />
-                              <foreignObject
-                                x={`${(box.x / 600) * 100}%`}
-                                y={`${Math.max(0, (box.y / 400) * 100 - 8)}%`}
-                                width="120"
-                                height="30"
-                              >
-                                <div className="bg-violet-950/90 text-violet-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-400/50 inline-flex items-center gap-1 shadow-lg">
-                                  <span>{box.label}</span>
-                                  <span className="text-cyan-300 font-bold">{box.score}</span>
-                                </div>
-                              </foreignObject>
-                            </g>
-                          ))}
-                        </svg>
-
-                        <div className="absolute bottom-3 left-3 bg-black/80 text-white px-3 py-1.5 rounded-full text-xs font-mono font-bold">
-                          Detected {msg.boxes.length} Bounding Box Coordinates
+                        {/* Action Icons Row (Matching Screenshot 3) */}
+                        <div className="flex items-center gap-3 pt-1 text-slate-400 dark:text-slate-500">
+                          <button onClick={() => navigator.clipboard.writeText(msg.text)} title="Copy" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button title="Thumbs Up" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <ThumbsUp className="w-4 h-4" />
+                          </button>
+                          <button title="Thumbs Down" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <ThumbsDown className="w-4 h-4" />
+                          </button>
+                          <button title="Regenerate" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                          <button title="Share" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <Share2 className="w-4 h-4" />
+                          </button>
+                          <button title="More" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     )}
@@ -845,14 +858,11 @@ export default function SatQueryDeepSeekChatPage() {
               </div>
             ))}
 
-            {/* Task 6: Loading State Banner */}
+            {/* Pulsating Loading Indicator Dot on Left (Matching Screenshot 2) */}
             {isGenerating && (
-              <div className="p-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 text-violet-900 dark:text-violet-200 flex items-center justify-between shadow-lg font-semibold text-xs sm:text-sm animate-pulse">
-                <div className="flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-violet-500 animate-spin" />
-                  <span>Analyzing satellite imagery with GeoChat-7B (Model loading)...</span>
-                </div>
-                <span className="font-mono text-xs text-cyan-500 font-bold hidden sm:inline">POST /api/v1/agent/query</span>
+              <div className="flex items-center gap-3 my-4 pl-1">
+                <div className="w-3.5 h-3.5 rounded-full bg-blue-500 animate-ping shrink-0" />
+                <span className="text-xs font-mono font-bold text-slate-400">Processing satellite query...</span>
               </div>
             )}
           </div>
