@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export default function SatQueryProfessionalHome() {
+export default function SatQueryStackryzeHome() {
   const animatedCapabilities = [
     "Single Satellite Image VQA & Captioning",
     "Spatial Object & Region Grounding [x1, y1, x2, y2]",
@@ -98,7 +98,7 @@ export default function SatQueryProfessionalHome() {
     <main className="py-8 sm:py-16 space-y-16 sm:space-y-24 relative overflow-hidden px-3 sm:px-6 max-w-7xl mx-auto">
       {/* 1. Hero Section */}
       <div className="text-center max-w-4xl mx-auto space-y-6 sm:space-y-8 pt-2 sm:pt-6 relative">
-        {/* Main Clean Professional Headline */}
+        {/* Main Stackryze Style Headline */}
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-slate-900 dark:text-white font-sans">
           Agentic AI system <br className="hidden sm:inline" />
           for{" "}
@@ -123,24 +123,23 @@ export default function SatQueryProfessionalHome() {
           An autonomous agentic intelligence framework that routes satellite queries to specialized fine-tuned models for spatial visual question answering, change detection, and SAR radar fusion.
         </p>
 
-        {/* Primary Action Buttons (Redesigned & Renamed Professionally) */}
-        <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3.5 sm:gap-4 pt-2 max-w-xs sm:max-w-none mx-auto">
-          {/* Primary Action Button: Launch SatQuery Chat Studio */}
+        {/* Primary Stackryze Button Styling (Matching https://stackryze.com/) */}
+        <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3 sm:gap-4 pt-2 max-w-xs sm:max-w-none mx-auto">
+          {/* Primary Button: Solid Crisp White Rectangle with Dark Text & Arrow */}
           <Link
             href="/chat"
-            className="px-7 py-3.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-extrabold text-xs sm:text-sm tracking-wide shadow-2xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3 group border border-slate-700/50 dark:border-white/20"
+            className="px-6 py-3 rounded-lg bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-sm tracking-tight shadow-xl transition-all flex items-center justify-center gap-2.5 border border-slate-300 group"
           >
-            <Sparkles className="w-4 h-4 text-cyan-400 dark:text-violet-600" />
             <span>Launch SatQuery Chat Studio</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-4 h-4 text-slate-950 group-hover:translate-x-1 transition-transform" />
           </Link>
 
-          {/* Secondary Action Button: View Architecture Docs */}
+          {/* Secondary Button: Dark Translucent Rectangle with Subtle Light Border */}
           <Link
             href="/agent-flow"
-            className="px-7 py-3.5 rounded-full bg-white dark:bg-[#141628] hover:bg-slate-100 dark:hover:bg-[#1c1f36] text-slate-900 dark:text-slate-100 font-extrabold text-xs sm:text-sm tracking-wide shadow-lg border border-slate-300 dark:border-violet-500/30 transition-all flex items-center justify-center gap-2"
+            className="px-6 py-3 rounded-lg bg-slate-900/90 dark:bg-black/70 hover:bg-slate-800 dark:hover:bg-white/10 text-white font-extrabold text-sm tracking-tight shadow-xl border border-slate-700 dark:border-white/20 transition-all flex items-center justify-center gap-2"
           >
-            <BookOpen className="w-4 h-4 text-slate-500 dark:text-violet-400" />
+            <BookOpen className="w-4 h-4 text-slate-300" />
             <span>View Architecture Docs</span>
           </Link>
         </div>
