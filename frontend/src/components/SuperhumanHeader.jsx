@@ -40,9 +40,6 @@ export function SuperhumanHeader({ theme = "dark", onToggleTheme }) {
             >
               SatQuery <span className="text-violet-500 font-mono text-base">AI</span>
             </span>
-            <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-cyan-500">
-              Agentic Intelligence
-            </span>
           </div>
         </Link>
 
