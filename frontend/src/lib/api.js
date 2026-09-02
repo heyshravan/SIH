@@ -14,18 +14,17 @@ const getApiBaseUrl = () => {
 export const API_BASE_URL = getApiBaseUrl();
 
 /**
- * Parse GeoChat token coordinate strings like {<40><55><52><59>|<90>} if returned by the backend.
+ * Parse GeoChat token coordinate strings like {<68><69><76><77>|<90>} or {<40><55><52><59>} if returned by the backend.
  * NO fallback/predefined boxes are created — only strict API responses are used.
  */
 export function parseGeoChatBoxes(text) {
   if (!text || typeof text !== 'string') return { cleanText: '', parsedBoxes: [] };
 
   const parsedBoxes = [];
-  const tokenRegex = /\{<(\d+)><(\d+)><(\d+)><(\d+)>(?:\|<(\d+)>)?\}/g;
+  // Flexible token regex matching {<y1><x1><y2><x2>|<conf>} or {<y1><x1><y2><x2>}
+  const tokenRegex = /\{<(\d+)><(\d+)><(\d+)><(\d+)>(?:[|:]?<(\d+)>)?\}/g;
 
   let match;
-  let cleanText = text;
-
   while ((match = tokenRegex.exec(text)) !== null) {
     const y1Token = parseInt(match[1], 10);
     const x1Token = parseInt(match[2], 10);
@@ -49,30 +48,44 @@ export function parseGeoChatBoxes(text) {
       y: y1,
       width: Math.max(1, x2 - x1),
       height: Math.max(1, y2 - y1),
-      label: 'Target',
+      label: 'Target Region',
       confidence: confToken,
     });
   }
 
-  cleanText = cleanText.replace(tokenRegex, '').trim();
+  // Strip all token coordinate strings cleanly
+  let cleanText = text
+    .replace(/\{<[^}]+\}/g, '')
+    .replace(/\{<[\d\s><|:]+>\}/g, '')
+    .trim();
 
   return { cleanText, parsedBoxes };
 }
 
 /**
- * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens
+ * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens completely
  */
 export function cleanHtmlResponse(text) {
   if (!text || typeof text !== 'string') return '';
 
-  // 1. Remove raw GeoChat coordinate token strings like {<0><48><62><92>|<90>}
-  let clean = text.replace(/\{<[^>]*>\}/g, '').trim();
+  // 1. Remove raw GeoChat coordinate token strings like {<68><69><76><77>|<90>} or {<0><48><62><92>}
+  let clean = text
+    .replace(/\{<[^}]+\}/g, '')
+    .replace(/\{<[\d\s><|:]+>\}/g, '')
+    .replace(/\{<[^>]*>\}/g, '')
+    .trim();
 
   // 2. Strip standard HTML tags (<p>, <div>, <span>, <br>, etc.)
   clean = clean.replace(/<\/?(p|div|span|br|b|i|strong|em|h[1-6]|ul|ol|li|a)[^>]*>/gi, '').trim();
 
-  // 3. Remove raw leftover brackets
-  if (clean === '{}' || clean === '{|}' || clean === '{}|{}' || clean === '{ }') {
+  // 3. Remove raw leftover brackets or empty token remnants
+  if (
+    clean === '{}' ||
+    clean === '{|}' ||
+    clean === '{}|{}' ||
+    clean === '{ }' ||
+    clean.startsWith('{<')
+  ) {
     clean = '';
   }
 
