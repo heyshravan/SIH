@@ -92,7 +92,7 @@ function createFallbackRGBImageFile() {
 }
 
 /**
- * Main Agent Query API
+ * Main Agent Query API (VQA & General Queries)
  * POST /api/v1/agent/query
  *
  * Sends multipart/form-data with image, prompt, taskType, and mode.
@@ -157,7 +157,6 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
 
     const data = await response.json();
 
-    // Clean HTML tags from backend answer
     if (data && data.answer) {
       data.answer = cleanHtmlResponse(data.answer);
     }
@@ -174,6 +173,68 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
     return {
       success: false,
       error: cleanHtmlResponse(error.message) || 'SatQuery AI backend is currently unavailable. Please try again.',
+    };
+  }
+}
+
+/**
+ * Real GeoChat Grounding API
+ * POST /api/v1/models/geochat/grounding
+ *
+ * Sends multipart/form-data with image and prompt.
+ * Returns JSON with boxes array: [{ x1, y1, x2, y2, label, confidence }]
+ */
+export async function analyzeGroundingImage({ image, prompt }) {
+  try {
+    const formData = new FormData();
+
+    if (image && image instanceof File) {
+      formData.append('image', image);
+    }
+
+    formData.append('prompt', prompt || 'Locate target objects in this satellite image.');
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/models/geochat/grounding`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorDetail = `Server returned status code ${response.status}.`;
+      try {
+        const errData = await response.json();
+        if (errData && errData.detail) {
+          if (typeof errData.detail === 'string') {
+            errorDetail = errData.detail;
+          } else if (Array.isArray(errData.detail)) {
+            errorDetail = errData.detail
+              .map((d) => `${d.loc ? d.loc.join('.') : ''}: ${d.msg}`)
+              .join(' | ');
+          }
+        } else if (errData && errData.message) {
+          errorDetail = errData.message;
+        }
+      } catch (e) {
+        // Non-JSON response
+      }
+      throw new Error(cleanHtmlResponse(errorDetail));
+    }
+
+    const data = await response.json();
+
+    if (data && data.answer) {
+      data.answer = cleanHtmlResponse(data.answer);
+    }
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error('SatQuery Grounding API Error:', error);
+    return {
+      success: false,
+      error: cleanHtmlResponse(error.message) || 'SatQuery AI grounding service unavailable.',
     };
   }
 }

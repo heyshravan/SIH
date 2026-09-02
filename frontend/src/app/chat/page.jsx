@@ -43,7 +43,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import Link from "next/link";
-import { analyzeImage, fetchHealthStatus, cleanHtmlResponse } from "@/lib/api";
+import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse } from "@/lib/api";
 
 const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
@@ -135,7 +135,6 @@ export default function SatQueryDeepSeekChatPage() {
           setActiveChatId(targetId);
           const activeSession = parsedSessions.find((s) => s.id === targetId);
           if (activeSession) {
-            // Clean any stored HTML tags in messages
             const cleanedMsgs = (activeSession.messages || []).map((m) => ({
               ...m,
               text: cleanHtmlResponse(m.text),
@@ -289,7 +288,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with real taskType routing to FastAPI backend
+  // Execute query with REAL GeoChat Grounding & VQA task routing
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -307,27 +306,45 @@ export default function SatQueryDeepSeekChatPage() {
       }
     }
 
-    const apiRes = await analyzeImage({
-      image: fileObj || null,
-      prompt: queryText || "Analyze satellite imagery.",
-      taskType,
-      mode: activeMode,
-    });
+    let apiRes;
+    // Task 3: Call real GeoChat Grounding endpoint POST /api/v1/models/geochat/grounding when taskType is grounding
+    if (taskType === "grounding" || activeMode === "vision") {
+      apiRes = await analyzeGroundingImage({
+        image: fileObj || null,
+        prompt: queryText || "Locate the agricultural land in this satellite image.",
+      });
+    } else {
+      apiRes = await analyzeImage({
+        image: fileObj || null,
+        prompt: queryText || "Analyze satellite imagery.",
+        taskType,
+        mode: activeMode,
+      });
+    }
 
     if (apiRes.success && apiRes.data) {
       const backendData = apiRes.data;
-      const rawAnswer = backendData.answer || backendData.response || backendData.message || "Analysis complete.";
+      let rawAnswer = backendData.answer || backendData.response || backendData.message;
+      
+      if (!rawAnswer) {
+        if (backendData.boxes && backendData.boxes.length > 0) {
+          rawAnswer = `Detected ${backendData.boxes.length} grounded region(s) in the satellite patch.`;
+        } else {
+          rawAnswer = "No grounded region was detected.";
+        }
+      }
+      
       const cleanAnswerText = cleanHtmlResponse(rawAnswer);
 
       const assistantMsg = {
         id: `asst-${Date.now()}`,
         sender: "assistant",
-        model: backendData.specialist || (activeMode === "vision" ? "GeoChat Grounding Specialist" : "GeoChat-7B"),
+        model: backendData.specialist || (activeMode === "vision" || taskType === "grounding" ? "GeoChat-grounding" : "GeoChat-7B"),
         task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
         text: cleanAnswerText,
-        boxes: backendData.boxes || [],
+        boxes: backendData.boxes || [], // Real bounding boxes returned by backend [{ x1, y1, x2, y2, label, confidence }]
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
       };
@@ -731,7 +748,7 @@ export default function SatQueryDeepSeekChatPage() {
           </div>
         )}
 
-        {/* Messages Thread (Clean Plain Text & No Attached Filename Badge) */}
+        {/* Messages Thread (Real GeoChat Bounding Boxes SVG Overlay) */}
         {messages.length > 0 && (
           <div className="flex-1 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
             {/* Mode Switcher Banner */}
@@ -777,7 +794,7 @@ export default function SatQueryDeepSeekChatPage() {
 
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-3">
-                {/* User Message Bubble: Rounded Blue Pill on Right (No Filename Overlay) */}
+                {/* User Message Bubble: Rounded Blue Pill on Right */}
                 {msg.sender === "user" && (
                   <div className="flex justify-end my-3">
                     <div className="max-w-xl bg-[#0055ff] dark:bg-[#1d4ed8] text-white px-5 py-2.5 rounded-3xl text-sm font-semibold shadow-md space-y-2">
@@ -791,7 +808,7 @@ export default function SatQueryDeepSeekChatPage() {
                   </div>
                 )}
 
-                {/* Assistant Response Layout: Clean Plain Text (HTML Sanitized) */}
+                {/* Assistant Response Layout */}
                 {msg.sender === "assistant" && (
                   <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl">
                     {msg.isError ? (
@@ -818,43 +835,66 @@ export default function SatQueryDeepSeekChatPage() {
                           </div>
                         )}
 
-                        {/* Plain Clean Assistant Answer Text (No Raw HTML Tags) */}
+                        {/* Plain Clean Assistant Answer Text */}
                         <div className={`text-sm sm:text-base leading-relaxed font-normal ${
                           isDark ? "text-slate-100" : "text-slate-900"
                         }`}>
                           {msg.text}
                         </div>
 
-                        {/* Bounding Boxes Output if present */}
+                        {/* REAL GeoChat-7B Grounding Bounding Box SVG Overlay (Steps 4, 5, 6, 7) */}
                         {msg.boxes && msg.boxes.length > 0 && (
                           <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
-                            <img src={msg.resultImage} alt="Output" className="w-full h-full object-cover" />
-                            <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                              {msg.boxes.map((box, bIdx) => (
-                                <g key={bIdx}>
-                                  <rect
-                                    x={`${(box.x / 600) * 100}%`}
-                                    y={`${(box.y / 400) * 100}%`}
-                                    width={`${(box.width / 600) * 100}%`}
-                                    height={`${(box.height / 400) * 100}%`}
-                                    fill="rgba(139, 92, 246, 0.25)"
-                                    stroke="#a78bfa"
-                                    strokeWidth="2.5"
-                                    strokeDasharray="4 2"
-                                  />
-                                  <foreignObject
-                                    x={`${(box.x / 600) * 100}%`}
-                                    y={`${Math.max(0, (box.y / 400) * 100 - 8)}%`}
-                                    width="120"
-                                    height="30"
-                                  >
-                                    <div className="bg-violet-950/90 text-violet-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-400/50 inline-flex items-center gap-1 shadow-lg">
-                                      <span>{box.label}</span>
-                                      <span className="text-cyan-300 font-bold">{box.score}</span>
-                                    </div>
-                                  </foreignObject>
-                                </g>
-                              ))}
+                            <img
+                              src={msg.resultImage}
+                              alt="Grounded Output Patch"
+                              className="w-full h-full object-cover"
+                            />
+
+                            <svg
+                              className="absolute inset-0 w-full h-full pointer-events-none"
+                              viewBox="0 0 100 100"
+                              preserveAspectRatio="none"
+                            >
+                              {msg.boxes.map((box, bIdx) => {
+                                // Task 4 & 5: Backend returns pixel coordinates x1, y1, x2, y2
+                                const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
+                                const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
+                                const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
+                                const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
+                                const width = Math.max(1, x2 - x1);
+                                const height = Math.max(1, y2 - y1);
+
+                                return (
+                                  <g key={bIdx}>
+                                    <rect
+                                      x={x1}
+                                      y={y1}
+                                      width={width}
+                                      height={height}
+                                      fill="rgba(139, 92, 246, 0.25)"
+                                      stroke="#a78bfa"
+                                      strokeWidth="2"
+                                      strokeDasharray="4 2"
+                                    />
+                                    {box.label && (
+                                      <foreignObject
+                                        x={x1}
+                                        y={Math.max(0, y1 - 8)}
+                                        width="120"
+                                        height="30"
+                                      >
+                                        <div className="bg-violet-950/90 text-violet-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-400/50 inline-flex items-center gap-1 shadow-lg">
+                                          <span>{box.label}</span>
+                                          {box.confidence && (
+                                            <span className="text-cyan-300 font-bold">{box.confidence}%</span>
+                                          )}
+                                        </div>
+                                      </foreignObject>
+                                    )}
+                                  </g>
+                                );
+                              })}
                             </svg>
                           </div>
                         )}
