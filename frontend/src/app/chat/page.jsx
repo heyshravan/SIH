@@ -43,6 +43,7 @@ import {
   MoreHorizontal,
   Square,
   StopCircle,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
@@ -56,13 +57,18 @@ export default function SatQueryDeepSeekChatPage() {
   const [mode, setMode] = useState("expert"); // instant, expert, vision
   const [agentThink, setAgentThink] = useState(true);
   const [earthSearch, setEarthSearch] = useState(false);
+  const [changeDetectionMode, setChangeDetectionMode] = useState(false);
+
   const [inputQuery, setInputQuery] = useState("");
-  const [attachedImage, setAttachedImage] = useState(null);
+  const [attachedImage, setAttachedImage] = useState(null); // T1 image
+  const [attachedImage2, setAttachedImage2] = useState(null); // T2 image (Change Detection)
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [backendHealth, setBackendHealth] = useState({ healthy: null, status: "checking" });
   const [pasteNotification, setPasteNotification] = useState(false);
 
   const fileInputRef = useRef(null);
+  const fileInputRef2 = useRef(null);
   const abortControllerRef = useRef(null);
 
   const [activeChatId, setActiveChatId] = useState("chat-1");
@@ -87,6 +93,7 @@ export default function SatQueryDeepSeekChatPage() {
       query: "Compare T1 vs T2 imagery to detect new infrastructure constructions.",
       taskType: "change",
       mode: "expert",
+      isChange: true,
     },
     {
       id: "fusion",
@@ -209,11 +216,21 @@ export default function SatQueryDeepSeekChatPage() {
           e.preventDefault();
           const imageUrl = URL.createObjectURL(file);
           const fileName = file.name && file.name !== "image.png" ? file.name : `pasted_satellite_${Date.now()}.png`;
-          setAttachedImage({
-            file: file,
-            name: fileName,
-            url: imageUrl,
-          });
+          
+          if (changeDetectionMode && attachedImage) {
+            setAttachedImage2({
+              file: file,
+              name: `T2_${fileName}`,
+              url: imageUrl,
+            });
+          } else {
+            setAttachedImage({
+              file: file,
+              name: fileName,
+              url: imageUrl,
+            });
+          }
+
           setPasteNotification(true);
           setTimeout(() => setPasteNotification(false), 3000);
           break;
@@ -222,15 +239,23 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = (e, isSecond = false) => {
     const file = e.target.files[0];
     if (file) {
       const imageUrl = URL.createObjectURL(file);
-      setAttachedImage({
-        file: file,
-        name: file.name,
-        url: imageUrl,
-      });
+      if (isSecond) {
+        setAttachedImage2({
+          file: file,
+          name: `T2_${file.name}`,
+          url: imageUrl,
+        });
+      } else {
+        setAttachedImage({
+          file: file,
+          name: file.name,
+          url: imageUrl,
+        });
+      }
     }
   };
 
@@ -241,6 +266,7 @@ export default function SatQueryDeepSeekChatPage() {
     setMessages(rawMsgs.map((m) => ({ ...m, text: cleanHtmlResponse(m.text) })));
     setInputQuery("");
     setAttachedImage(null);
+    setAttachedImage2(null);
   };
 
   const handleNewChat = () => {
@@ -257,6 +283,7 @@ export default function SatQueryDeepSeekChatPage() {
     setMessages([]);
     setInputQuery("");
     setAttachedImage(null);
+    setAttachedImage2(null);
     try {
       localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
       localStorage.setItem(STORAGE_KEY_ACTIVE_ID, newId);
@@ -292,8 +319,16 @@ export default function SatQueryDeepSeekChatPage() {
     setIsGenerating(false);
   };
 
-  // Execute query passing AbortSignal and ensuring assistant response is always displayed
-  const executeQuery = async (queryText, fileObj, displayImageUrl, overrideTaskType, overrideMode) => {
+  // Execute query passing AbortSignal and supporting dual image attachments (T1 & T2) for Change Detection
+  const executeQuery = async (
+    queryText,
+    fileObj,
+    displayImageUrl,
+    overrideTaskType,
+    overrideMode,
+    fileObj2 = null,
+    displayImageUrl2 = null
+  ) => {
     if (!queryText && !fileObj && !displayImageUrl) return;
 
     setIsGenerating(true);
@@ -303,10 +338,10 @@ export default function SatQueryDeepSeekChatPage() {
     const activeMode = overrideMode || mode;
     let taskType = overrideTaskType;
     if (!taskType) {
-      if (activeMode === "vision") {
+      if (changeDetectionMode) {
+        taskType = "change";
+      } else if (activeMode === "vision") {
         taskType = "grounding";
-      } else if (activeMode === "expert") {
-        taskType = "vqa";
       } else {
         taskType = "vqa";
       }
@@ -324,7 +359,8 @@ export default function SatQueryDeepSeekChatPage() {
     } else {
       apiRes = await analyzeImage({
         image: fileObj || null,
-        prompt: queryText || "Analyze satellite imagery.",
+        image2: fileObj2 || null,
+        prompt: queryText || (changeDetectionMode ? "Compare T1 (Before) vs T2 (After) satellite patches to detect structural urban changes." : "Analyze satellite imagery."),
         taskType,
         mode: activeMode,
         agentThink,
@@ -347,10 +383,15 @@ export default function SatQueryDeepSeekChatPage() {
       return;
     }
 
-    // Determine output display image URL
+    // Determine output display image URLs
     let resultImgUrl = displayImageUrl;
     if (!resultImgUrl && fileObj) {
       resultImgUrl = URL.createObjectURL(fileObj);
+    }
+
+    let resultImgUrl2 = displayImageUrl2;
+    if (!resultImgUrl2 && fileObj2) {
+      resultImgUrl2 = URL.createObjectURL(fileObj2);
     }
 
     if (apiRes.success && apiRes.data) {
@@ -364,21 +405,24 @@ export default function SatQueryDeepSeekChatPage() {
       if (!cleanAnswerText) {
         if (finalBoxes.length > 0) {
           cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} target region${finalBoxes.length > 1 ? "s" : ""}.`;
+        } else if (changeDetectionMode || taskType === "change") {
+          cleanAnswerText = "Bi-Temporal Change Detection complete. GeoChat analyzed T1 vs T2 patches to evaluate structural variations.";
         } else {
-          cleanAnswerText = "Grounding complete. GeoChat processed the satellite patch. No specific bounding boxes were detected for this prompt.";
+          cleanAnswerText = "Analysis complete. GeoChat processed the satellite imagery.";
         }
       }
 
       const assistantMsg = {
         id: `asst-${Date.now()}`,
         sender: "assistant",
-        model: backendData.specialist || (activeMode === "vision" || taskType === "grounding" ? "GeoChat-grounding" : "GeoChat-7B"),
+        model: backendData.specialist || (taskType === "change" ? "GeoChat-ChangeDetection" : activeMode === "vision" ? "GeoChat-grounding" : "GeoChat-7B"),
         task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
-        thinking: agentThink ? (backendData.thinking || backendData.reasoning || "Agentic reasoning complete.") : null,
+        thinking: agentThink ? (backendData.thinking || backendData.reasoning || "Agentic reasoning trace active...") : null,
         text: cleanAnswerText,
         boxes: finalBoxes,
         resultImage: resultImgUrl,
+        resultImage2: resultImgUrl2,
         status: backendData.status || null,
       };
       setMessages((prev) => [...prev, assistantMsg]);
@@ -419,23 +463,38 @@ export default function SatQueryDeepSeekChatPage() {
     const userMsg = {
       id: `user-${Date.now()}`,
       sender: "user",
-      text: inputQuery || "Analyze attached satellite imagery.",
+      text: inputQuery || (changeDetectionMode ? "Compare T1 (Before) vs T2 (After) patches for change detection." : "Analyze attached satellite imagery."),
       image: attachedImage ? attachedImage.url : null,
+      image2: attachedImage2 ? attachedImage2.url : null,
       imageName: attachedImage ? attachedImage.name : null,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     const currentImg = attachedImage;
+    const currentImg2 = attachedImage2;
     const currentQuery = inputQuery;
+
     setInputQuery("");
     setAttachedImage(null);
+    setAttachedImage2(null);
 
-    executeQuery(currentQuery, currentImg?.file, currentImg?.url);
+    executeQuery(
+      currentQuery,
+      currentImg?.file,
+      currentImg?.url,
+      changeDetectionMode ? "change" : null,
+      mode,
+      currentImg2?.file,
+      currentImg2?.url
+    );
   };
 
   const handlePresetClick = (sample) => {
     if (sample.mode) {
       setMode(sample.mode);
+    }
+    if (sample.isChange) {
+      setChangeDetectionMode(true);
     }
     setInputQuery(sample.query);
 
@@ -451,11 +510,18 @@ export default function SatQueryDeepSeekChatPage() {
         isDark ? "bg-[#070810] text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
-      {/* Hidden File Input */}
+      {/* Hidden File Inputs for T1 and T2 Images */}
       <input
         type="file"
         ref={fileInputRef}
-        onChange={handleFileUpload}
+        onChange={(e) => handleFileUpload(e, false)}
+        accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={fileInputRef2}
+        onChange={(e) => handleFileUpload(e, true)}
         accept="image/*"
         className="hidden"
       />
@@ -494,7 +560,7 @@ export default function SatQueryDeepSeekChatPage() {
           {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
 
-        {/* Brand Header inside Sidebar (Clean Text - Logo Icon Removed) */}
+        {/* Brand Header inside Sidebar */}
         <div className={`p-3 border-b ${isDark ? "border-white/10" : "border-slate-200"} flex items-center justify-between`}>
           <Link href="/" className="flex items-center gap-1.5 overflow-hidden px-1">
             {sidebarOpen && (
@@ -641,17 +707,19 @@ export default function SatQueryDeepSeekChatPage() {
                 <Home className="w-4 h-4 text-cyan-500" />
                 <span>Return to Home</span>
               </Link>
-              <Link
-                href="/change-detection"
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${
-                  isDark
+              <button
+                onClick={() => setChangeDetectionMode(!changeDetectionMode)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-colors font-bold ${
+                  changeDetectionMode
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : isDark
                     ? "text-slate-200 hover:bg-white/10 hover:text-white"
                     : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
-                <GitMerge className="w-4 h-4 text-indigo-500" />
+                <GitMerge className="w-4 h-4 text-indigo-400" />
                 <span>Change Detection</span>
-              </Link>
+              </button>
             </div>
           )}
 
@@ -826,15 +894,24 @@ export default function SatQueryDeepSeekChatPage() {
 
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-3">
-                {/* User Message Bubble: Rounded Blue Pill on Right */}
+                {/* User Message Bubble: Dual Images for Change Detection */}
                 {msg.sender === "user" && (
                   <div className="flex justify-end my-3">
                     <div className="max-w-xl bg-[#0055ff] dark:bg-[#1d4ed8] text-white px-5 py-2.5 rounded-3xl text-sm font-semibold shadow-md space-y-2">
-                      {msg.image && (
-                        <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
-                          <img src={msg.image} alt="Input Patch" className="w-full h-36 object-cover" />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {msg.image && (
+                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
+                            <img src={msg.image} alt="T1 Before Patch" className="w-full h-36 object-cover" />
+                            <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T1 (Before)</span>
+                          </div>
+                        )}
+                        {msg.image2 && (
+                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
+                            <img src={msg.image2} alt="T2 After Patch" className="w-full h-36 object-cover" />
+                            <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T2 (After)</span>
+                          </div>
+                        )}
+                      </div>
                       <p className="leading-relaxed">{msg.text}</p>
                     </div>
                   </div>
@@ -886,61 +963,57 @@ export default function SatQueryDeepSeekChatPage() {
                         </div>
 
                         {/* Output Image Display & Bounding Box SVG Overlay */}
-                        {msg.resultImage && (
-                          <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
-                            <img
-                              src={msg.resultImage}
-                              alt="Satellite Output Patch"
-                              className="w-full h-full object-cover"
-                            />
+                        {(msg.resultImage || msg.resultImage2) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl mt-2">
+                            {msg.resultImage && (
+                              <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md border-slate-300 dark:border-white/15">
+                                <img
+                                  src={msg.resultImage}
+                                  alt="T1 Satellite Output Patch"
+                                  className="w-full h-full object-cover"
+                                />
+                                {msg.boxes && msg.boxes.length > 0 && (
+                                  <svg
+                                    className="absolute inset-0 w-full h-full pointer-events-none"
+                                    viewBox="0 0 100 100"
+                                    preserveAspectRatio="none"
+                                  >
+                                    {msg.boxes.map((box, bIdx) => {
+                                      const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
+                                      const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
+                                      const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
+                                      const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
+                                      const width = Math.max(1, x2 - x1);
+                                      const height = Math.max(1, y2 - y1);
 
-                            {/* Render Bounding Box Overlay ONLY if API returned boxes */}
-                            {msg.boxes && msg.boxes.length > 0 && (
-                              <svg
-                                className="absolute inset-0 w-full h-full pointer-events-none"
-                                viewBox="0 0 100 100"
-                                preserveAspectRatio="none"
-                              >
-                                {msg.boxes.map((box, bIdx) => {
-                                  const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
-                                  const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
-                                  const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
-                                  const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
-                                  const width = Math.max(1, x2 - x1);
-                                  const height = Math.max(1, y2 - y1);
+                                      return (
+                                        <g key={bIdx}>
+                                          <rect
+                                            x={x1}
+                                            y={y1}
+                                            width={width}
+                                            height={height}
+                                            fill="rgba(239, 68, 68, 0.15)"
+                                            stroke="#ef4444"
+                                            strokeWidth="1.5"
+                                            strokeDasharray="3 1.5"
+                                          />
+                                        </g>
+                                      );
+                                    })}
+                                  </svg>
+                                )}
+                              </div>
+                            )}
 
-                                  return (
-                                    <g key={bIdx}>
-                                      {/* Crisp RED bounding box from API coordinates */}
-                                      <rect
-                                        x={x1}
-                                        y={y1}
-                                        width={width}
-                                        height={height}
-                                        fill="rgba(239, 68, 68, 0.15)"
-                                        stroke="#ef4444"
-                                        strokeWidth="1.5"
-                                        strokeDasharray="3 1.5"
-                                      />
-                                      {box.label && (
-                                        <foreignObject
-                                          x={x1}
-                                          y={Math.max(0, y1 - 6)}
-                                          width="120"
-                                          height="24"
-                                        >
-                                          <div className="bg-red-950/90 text-red-100 text-[9px] font-mono px-1.5 py-0.5 rounded border border-red-500/60 inline-flex items-center gap-1 shadow-md font-bold whitespace-nowrap">
-                                            <span>{box.label}</span>
-                                            {box.confidence && (
-                                              <span className="text-amber-300 font-bold">{box.confidence}%</span>
-                                            )}
-                                          </div>
-                                        </foreignObject>
-                                      )}
-                                    </g>
-                                  );
-                                })}
-                              </svg>
+                            {msg.resultImage2 && (
+                              <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md border-slate-300 dark:border-white/15">
+                                <img
+                                  src={msg.resultImage2}
+                                  alt="T2 Satellite Output Patch"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                             )}
                           </div>
                         )}
@@ -996,22 +1069,32 @@ export default function SatQueryDeepSeekChatPage() {
 
         {/* Floating Input Container */}
         <div className="max-w-3xl mx-auto w-full pt-2">
-          {attachedImage && (
-            <div className={`flex items-center gap-2 p-2.5 rounded-xl max-w-xs text-xs font-extrabold shadow-lg border mb-2 ${
-              isDark
-                ? "bg-[#141628] border-violet-500/30 text-white"
-                : "bg-white border-slate-300 text-slate-900"
-            }`}>
-              <img src={attachedImage.url} alt="Attached" className="w-8 h-8 rounded-lg object-cover" />
-              <span className="truncate flex-1 font-mono text-[11px] text-cyan-500 dark:text-cyan-400">
-                {attachedImage.name}
-              </span>
-              <button
-                onClick={() => setAttachedImage(null)}
-                className="w-5 h-5 rounded-full hover:bg-white/20 text-slate-400 hover:text-white flex items-center justify-center"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+          {/* Dual Image Preview Bar for Change Detection */}
+          {(attachedImage || attachedImage2) && (
+            <div className="flex items-center gap-2 mb-2 overflow-x-auto">
+              {attachedImage && (
+                <div className={`flex items-center gap-2 p-2 rounded-xl text-xs font-extrabold shadow-lg border ${
+                  isDark ? "bg-[#141628] border-violet-500/30 text-white" : "bg-white border-slate-300 text-slate-900"
+                }`}>
+                  <img src={attachedImage.url} alt="T1 Attached" className="w-8 h-8 rounded-lg object-cover" />
+                  <span className="font-mono text-[11px] text-cyan-500">T1: {attachedImage.name}</span>
+                  <button onClick={() => setAttachedImage(null)} className="p-1 hover:text-rose-500">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {attachedImage2 && (
+                <div className={`flex items-center gap-2 p-2 rounded-xl text-xs font-extrabold shadow-lg border ${
+                  isDark ? "bg-[#141628] border-indigo-500/30 text-white" : "bg-white border-slate-300 text-slate-900"
+                }`}>
+                  <img src={attachedImage2.url} alt="T2 Attached" className="w-8 h-8 rounded-lg object-cover" />
+                  <span className="font-mono text-[11px] text-indigo-400">T2: {attachedImage2.name}</span>
+                  <button onClick={() => setAttachedImage2(null)} className="p-1 hover:text-rose-500">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1032,16 +1115,16 @@ export default function SatQueryDeepSeekChatPage() {
                   if (!isGenerating) handleSendMessage();
                 }
               }}
-              placeholder="Ask SatQuery AI or paste satellite imagery..."
+              placeholder={changeDetectionMode ? "Compare T1 vs T2 satellite imagery for urban change detection..." : "Ask SatQuery AI or paste satellite imagery..."}
               className="w-full bg-transparent text-xs sm:text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
             />
 
             {/* Bottom Input Action Controls */}
             <div className="flex items-center justify-between pt-2 border-t dark:border-white/10 border-slate-200 gap-2">
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
                 <button
                   onClick={() => setAgentThink(!agentThink)}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all whitespace-nowrap ${
                     agentThink
                       ? "bg-violet-600/30 text-violet-600 dark:text-violet-300 border border-violet-500/40"
                       : "dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-transparent"
@@ -1052,8 +1135,20 @@ export default function SatQueryDeepSeekChatPage() {
                 </button>
 
                 <button
+                  onClick={() => setChangeDetectionMode(!changeDetectionMode)}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all whitespace-nowrap ${
+                    changeDetectionMode
+                      ? "bg-indigo-600 text-white shadow-md border border-indigo-400"
+                      : "dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-transparent"
+                  }`}
+                >
+                  <GitMerge className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Change Detection</span>
+                </button>
+
+                <button
                   onClick={() => setEarthSearch(!earthSearch)}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all whitespace-nowrap ${
                     earthSearch
                       ? "bg-cyan-600/30 text-cyan-600 dark:text-cyan-300 border border-cyan-500/40"
                       : "dark:bg-white/10 text-slate-500 dark:text-slate-400 border border-transparent"
@@ -1064,11 +1159,22 @@ export default function SatQueryDeepSeekChatPage() {
                 </button>
               </div>
 
-              {/* Action Buttons: (+) Add Symbol, (📎) Paperclip Attachment, (↑) Send Arrow or (⏹) Stop Button */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Action Buttons: (+) Add T1 Symbol, (🔄 T2) Attach T2 Symbol, (↑) Send Arrow */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {changeDetectionMode && attachedImage && (
+                  <button
+                    onClick={() => fileInputRef2.current?.click()}
+                    title="Attach T2 (After) Satellite Patch"
+                    className="px-2.5 py-1.5 rounded-full bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 font-mono text-[11px] font-extrabold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>T2 Patch</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  title="Add Satellite Imagery / Patch (+)"
+                  title="Attach T1 / Satellite Patch (+)"
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border dark:bg-white/10 dark:hover:bg-white/20 dark:border-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800 flex items-center justify-center transition-colors shadow-sm"
                 >
                   <Plus className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-cyan-500 dark:text-cyan-400 stroke-[3]" />

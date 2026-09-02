@@ -150,12 +150,13 @@ function createFallbackRGBImageFile() {
 }
 
 /**
- * Main Agent Query API (VQA & General Queries)
+ * Main Agent Query API (VQA & Change Detection Queries)
  * POST /api/v1/agent/query
- * Supports AbortSignal to cancel active requests
+ * Supports dual image attachments for Bi-Temporal Change Detection (T1 vs T2)
  */
 export async function analyzeImage({
   image,
+  image2 = null,
   prompt,
   taskType = 'auto',
   mode = 'expert',
@@ -175,6 +176,10 @@ export async function analyzeImage({
 
     if (fileToUpload) {
       formData.append('image', fileToUpload);
+    }
+
+    if (image2 && image2 instanceof File) {
+      formData.append('image2', image2);
     }
 
     const textPrompt = prompt || 'Analyze this satellite imagery.';
@@ -252,7 +257,6 @@ export async function analyzeImage({
 /**
  * Real GeoChat Grounding API
  * POST /api/v1/models/geochat/grounding
- * Supports AbortSignal to cancel active requests
  */
 export async function analyzeGroundingImage({
   image,
