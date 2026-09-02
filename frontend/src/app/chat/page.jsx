@@ -1141,18 +1141,6 @@ function ChatContent() {
                           <span className="text-cyan-600 dark:text-cyan-400">{msg.task}</span>
                         </div>
 
-                        {/* Reasoning Log */}
-                        {msg.thinking && (
-                          <div className={`p-3.5 rounded-2xl border text-xs font-mono space-y-1.5 ${
-                            isDark ? "bg-black/40 border-white/10 text-slate-300" : "bg-slate-100 border-slate-200 text-slate-700"
-                          }`}>
-                            <p className="text-violet-500 font-extrabold flex items-center gap-2">
-                              <Brain className="w-4 h-4" /> Agent Controller Reasoning
-                            </p>
-                            <pre className="whitespace-pre-wrap leading-relaxed">{msg.thinking}</pre>
-                          </div>
-                        )}
-
                         {/* Plain Clean Assistant Answer Text */}
                         <div className={`text-sm sm:text-base leading-relaxed font-medium ${
                           isDark ? "text-slate-100" : "text-slate-900"

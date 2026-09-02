@@ -133,26 +133,28 @@ export function parseGeoChatBoxes(text, prompt = '') {
     }
   }
 
-  // Strip all token coordinate strings cleanly
+  // Strip all token coordinate strings and delimiters cleanly
   let cleanText = text
     .replace(/\{<[^}]+\}/g, '')
     .replace(/\{<[\d\s><|:]+>\}/g, '')
+    .replace(/<delim>/gi, '')
     .trim();
 
   return { cleanText, parsedBoxes };
 }
 
 /**
- * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens completely
+ * Strip HTML tags (<p>, <div>, etc.), <delim> tags, and raw GeoChat coordinate tokens completely
  */
 export function cleanHtmlResponse(text) {
   if (!text || typeof text !== 'string') return '';
 
-  // 1. Remove raw GeoChat coordinate token strings like {<68><69><76><77>|<90>} or {<0><48><62><92>}
+  // 1. Remove raw GeoChat coordinate token strings like {<68><69><76><77>|<90>}, <delim>, etc.
   let clean = text
     .replace(/\{<[^}]+\}/g, '')
     .replace(/\{<[\d\s><|:]+>\}/g, '')
     .replace(/\{<[^>]*>\}/g, '')
+    .replace(/<delim>/gi, '')
     .trim();
 
   // 2. Strip standard HTML tags (<p>, <div>, <span>, <br>, etc.)
