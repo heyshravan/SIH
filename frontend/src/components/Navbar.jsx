@@ -97,7 +97,7 @@ export function Navbar() {
             >
               <Icon className="w-3.5 h-3.5" />
               {item.name}
-            </Icon>
+            </Link>
           );
         })}
       </div>
