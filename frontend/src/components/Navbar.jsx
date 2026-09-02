@@ -20,7 +20,7 @@ export function Navbar() {
 
   const navItems = [
     { name: "Studio", href: "/", icon: Satellite },
-    { name: "Change Detection", href: "/change-detection", icon: GitMerge },
+    { name: "Change Detection", href: "/chat?mode=change", icon: GitMerge },
     { name: "Optical + SAR", href: "/fusion", icon: Layers },
     { name: "Agent Flow", href: "/agent-flow", icon: Cpu },
     { name: "Benchmarks", href: "/benchmarks", icon: BarChart3 },
@@ -49,7 +49,7 @@ export function Navbar() {
         <nav className="hidden lg:flex items-center gap-1 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800/80">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href.startsWith('/chat') && pathname === '/chat');
             return (
               <Link
                 key={item.href}
@@ -97,7 +97,7 @@ export function Navbar() {
             >
               <Icon className="w-3.5 h-3.5" />
               {item.name}
-            </Link>
+            </Icon>
           );
         })}
       </div>

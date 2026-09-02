@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +52,8 @@ import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlRespon
 const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
 
-export default function SatQueryDeepSeekChatPage() {
+function ChatContent() {
+  const searchParams = useSearchParams();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [theme, setTheme] = useState("light");
   const [mode, setMode] = useState("expert"); // instant, expert, vision
@@ -111,7 +113,7 @@ export default function SatQueryDeepSeekChatPage() {
     },
   ];
 
-  // 1. Load chat sessions from localStorage on mount
+  // 1. Load chat sessions from localStorage on mount & check query params
   useEffect(() => {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -125,6 +127,10 @@ export default function SatQueryDeepSeekChatPage() {
       setBackendHealth(res);
     };
     checkHealth();
+
+    if (searchParams && searchParams.get("mode") === "change") {
+      setChangeDetectionMode(true);
+    }
 
     try {
       const savedSessions = localStorage.getItem(STORAGE_KEY_SESSIONS);
@@ -157,7 +163,7 @@ export default function SatQueryDeepSeekChatPage() {
     return () => {
       window.removeEventListener("paste", handlePasteEvent);
     };
-  }, []);
+  }, [searchParams]);
 
   // 2. Save active session messages to localStorage whenever messages or activeChatId changes
   useEffect(() => {
@@ -1211,5 +1217,13 @@ export default function SatQueryDeepSeekChatPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SatQueryDeepSeekChatPageWrapper() {
+  return (
+    <Suspense fallback={<div className="h-screen w-full bg-[#070810]" />}>
+      <ChatContent />
+    </Suspense>
   );
 }
