@@ -15,10 +15,22 @@ export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * Parse GeoChat token coordinate strings like {<68><69><76><77>|<90>} or {<40><55><52><59>} if returned by the backend.
- * NO fallback/predefined boxes are created — only strict API responses are used.
+ * Dynamically derives label text (Water, Vessel, Building, etc.) based on the user's prompt keywords.
  */
-export function parseGeoChatBoxes(text) {
+export function parseGeoChatBoxes(text, prompt = '') {
   if (!text || typeof text !== 'string') return { cleanText: '', parsedBoxes: [] };
+
+  let dynamicLabel = 'Target';
+  const lowerPrompt = (prompt || '').toLowerCase();
+  if (lowerPrompt.includes('water') || lowerPrompt.includes('ocean') || lowerPrompt.includes('river') || lowerPrompt.includes('lake') || lowerPrompt.includes('sea')) {
+    dynamicLabel = 'Water';
+  } else if (lowerPrompt.includes('ship') || lowerPrompt.includes('vessel') || lowerPrompt.includes('boat') || lowerPrompt.includes('harbor') || lowerPrompt.includes('port')) {
+    dynamicLabel = 'Vessel';
+  } else if (lowerPrompt.includes('building') || lowerPrompt.includes('house') || lowerPrompt.includes('structure') || lowerPrompt.includes('urban')) {
+    dynamicLabel = 'Building';
+  } else if (lowerPrompt.includes('vegetation') || lowerPrompt.includes('tree') || lowerPrompt.includes('forest') || lowerPrompt.includes('crop')) {
+    dynamicLabel = 'Vegetation';
+  }
 
   const parsedBoxes = [];
   // Flexible token regex matching {<y1><x1><y2><x2>|<conf>} or {<y1><x1><y2><x2>}
@@ -46,9 +58,9 @@ export function parseGeoChatBoxes(text) {
       y2,
       x: x1,
       y: y1,
-      width: Math.max(1, x2 - x1),
-      height: Math.max(1, y2 - y1),
-      label: 'Target Region',
+      width: Math.max(2, x2 - x1),
+      height: Math.max(2, y2 - y1),
+      label: dynamicLabel,
       confidence: confToken,
     });
   }

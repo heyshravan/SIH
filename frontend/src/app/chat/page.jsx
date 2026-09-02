@@ -465,13 +465,14 @@ function ChatContent() {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
       
-      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer);
+      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer, queryText);
       const finalBoxes = [...(backendData.boxes || []), ...parsedBoxes];
 
       let cleanAnswerText = cleanHtmlResponse(cleanText);
       if (!cleanAnswerText) {
         if (finalBoxes.length > 0) {
-          cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} target region${finalBoxes.length > 1 ? "s" : ""}.`;
+          const detectedLabel = finalBoxes[0].label || "target";
+          cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} ${detectedLabel.toLowerCase()} region${finalBoxes.length > 1 ? "s" : ""}.`;
         } else if (changeDetectionMode || taskType === "change") {
           cleanAnswerText = "Bi-Temporal Change Detection complete. GeoChat analyzed T1 vs T2 patches to evaluate structural variations.";
         } else {
@@ -483,7 +484,7 @@ function ChatContent() {
       let reasoningText = backendData.thinking || backendData.reasoning || backendData.analysis_trace;
       if (!reasoningText || reasoningText === "Agentic reasoning trace active...") {
         if (finalBoxes.length > 0) {
-          reasoningText = `[Step 1/3] Ingestion: Input Satellite Patch Vision Tokenization\n[Step 2/3] Model Execution: GeoChat-7B Spatial Grounding for prompt "${queryText || 'Locate target objects'}"\n[Step 3/3] Extraction: Identified ${finalBoxes.length} spatial region(s). Red bounding box outline rendered over coordinates.`;
+          reasoningText = `[Step 1/3] Ingestion: Input Satellite Patch Vision Tokenization\n[Step 2/3] Model Execution: GeoChat-7B Spatial Grounding for prompt "${queryText || 'Locate target objects'}"\n[Step 3/3] Extraction: Identified ${finalBoxes.length} spatial region(s) [${finalBoxes.map(b => b.label).join(', ')}]. Red bounding box outline rendered.`;
         } else if (changeDetectionMode || taskType === 'change') {
           reasoningText = `[Step 1/3] Bi-Temporal Pair Alignment (T1 Before vs T2 After)\n[Step 2/3] Model Execution: GeoChat Agent Controller Structural Variation Analysis\n[Step 3/3] Change Detection Complete: Evaluated infrastructural and land cover changes between satellite timestamps.`;
         } else {
@@ -1094,7 +1095,7 @@ function ChatContent() {
                                 />
                                 {msg.boxes && msg.boxes.length > 0 && (
                                   <svg
-                                    className="absolute inset-0 w-full h-full pointer-events-none"
+                                    className="absolute inset-0 w-full h-full pointer-events-none z-10"
                                     viewBox="0 0 100 100"
                                     preserveAspectRatio="none"
                                   >
@@ -1103,8 +1104,8 @@ function ChatContent() {
                                       const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
                                       const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
                                       const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
-                                      const width = Math.max(1, x2 - x1);
-                                      const height = Math.max(1, y2 - y1);
+                                      const width = Math.max(2, x2 - x1);
+                                      const height = Math.max(2, y2 - y1);
 
                                       return (
                                         <g key={bIdx}>
@@ -1113,11 +1114,25 @@ function ChatContent() {
                                             y={y1}
                                             width={width}
                                             height={height}
-                                            fill="rgba(239, 68, 68, 0.15)"
+                                            fill="rgba(239, 68, 68, 0.2)"
                                             stroke="#ef4444"
-                                            strokeWidth="1.5"
+                                            strokeWidth="2"
                                             strokeDasharray="3 1.5"
+                                            vectorEffect="non-scaling-stroke"
                                           />
+                                          <foreignObject
+                                            x={x1}
+                                            y={Math.max(0, y1 - 8)}
+                                            width="140"
+                                            height="26"
+                                          >
+                                            <div className="bg-red-950/90 text-red-100 text-[10px] font-mono px-2 py-0.5 rounded border border-red-500/80 inline-flex items-center gap-1 shadow-lg font-bold whitespace-nowrap">
+                                              <span>🎯 {box.label || 'Target'}</span>
+                                              {box.confidence && (
+                                                <span className="text-amber-300 font-bold">{box.confidence}%</span>
+                                              )}
+                                            </div>
+                                          </foreignObject>
                                         </g>
                                       );
                                     })}
