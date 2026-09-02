@@ -97,12 +97,6 @@ export default function SatQueryProfessionalHome() {
     <main className="py-8 sm:py-16 space-y-16 sm:space-y-24 relative overflow-hidden px-3 sm:px-6 max-w-7xl mx-auto">
       {/* 1. Hero Section */}
       <div className="text-center max-w-4xl mx-auto space-y-6 sm:space-y-8 pt-2 sm:pt-6 relative">
-        {/* Top Centered Pill Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 shadow-lg backdrop-blur-md">
-          <Satellite className="w-4 h-4 text-amber-500 animate-spin style={{ animationDuration: '10s' }}" />
-          <span>SatQuery AI — Enterprise Remote Sensing Platform</span>
-        </div>
-
         {/* Main Clean Professional Headline */}
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-slate-900 dark:text-white font-sans">
           Agentic AI system <br className="hidden sm:inline" />
