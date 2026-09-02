@@ -36,9 +36,13 @@ import {
   AlertCircle,
   Activity,
   ClipboardCheck,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, fetchHealthStatus } from "@/lib/api";
+
+const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
+const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
 
 export default function SatQueryDeepSeekChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -54,6 +58,104 @@ export default function SatQueryDeepSeekChatPage() {
 
   const fileInputRef = useRef(null);
   const [activeChatId, setActiveChatId] = useState("chat-1");
+  const [chatHistories, setChatHistories] = useState([
+    { id: "chat-1", title: "New Satellite Analysis", date: "Today", messages: [] },
+  ]);
+  const [messages, setMessages] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // 1. Load chat sessions from localStorage on mount
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+
+    const isDarkClass = document.documentElement.classList.contains("dark");
+    setTheme(isDarkClass ? "dark" : "light");
+
+    // Task 8: Check backend health status
+    const checkHealth = async () => {
+      const res = await fetchHealthStatus();
+      setBackendHealth(res);
+    };
+    checkHealth();
+
+    // Load stored chat sessions from localStorage
+    try {
+      const savedSessions = localStorage.getItem(STORAGE_KEY_SESSIONS);
+      const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
+
+      if (savedSessions) {
+        const parsedSessions = JSON.parse(savedSessions);
+        if (Array.isArray(parsedSessions) && parsedSessions.length > 0) {
+          setChatHistories(parsedSessions);
+          const targetId = savedActiveId && parsedSessions.some((s) => s.id === savedActiveId)
+            ? savedActiveId
+            : parsedSessions[0].id;
+          setActiveChatId(targetId);
+          const activeSession = parsedSessions.find((s) => s.id === targetId);
+          if (activeSession) {
+            setMessages(activeSession.messages || []);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load chat sessions from localStorage:", e);
+    }
+    setIsInitialized(true);
+
+    // Attach global clipboard paste listener for Ctrl+V image pastes
+    window.addEventListener("paste", handlePasteEvent);
+    return () => {
+      window.removeEventListener("paste", handlePasteEvent);
+    };
+  }, []);
+
+  // 2. Save active session messages to localStorage whenever messages or activeChatId changes
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    try {
+      // Update title if first message exists
+      const updatedHistories = chatHistories.map((h) => {
+        if (h.id === activeChatId) {
+          let updatedTitle = h.title;
+          if (messages.length > 0 && messages[0].sender === "user") {
+            const firstText = messages[0].text;
+            updatedTitle = firstText.length > 30 ? firstText.substring(0, 30) + "..." : firstText;
+          }
+          return { ...h, title: updatedTitle, messages };
+        }
+        return h;
+      });
+
+      setChatHistories(updatedHistories);
+      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updatedHistories));
+      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activeChatId);
+    } catch (e) {
+      console.error("Failed to save chat sessions to localStorage:", e);
+    }
+  }, [messages, activeChatId, isInitialized]);
+
+  const isDark = theme === "dark";
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const body = document.body;
+    if (theme === "dark") {
+      setTheme("light");
+      root.classList.add("light");
+      root.classList.remove("dark");
+      body.classList.add("light");
+      body.classList.remove("dark");
+    } else {
+      setTheme("dark");
+      root.classList.add("dark");
+      root.classList.remove("light");
+      body.classList.add("dark");
+      body.classList.remove("light");
+    }
+  };
 
   // Clipboard Paste Image Listener for Ctrl+V
   const handlePasteEvent = (e) => {
@@ -80,56 +182,6 @@ export default function SatQueryDeepSeekChatPage() {
       }
     }
   };
-
-  useEffect(() => {
-    // Auto-detect mobile screen size on mount
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-
-    const isDarkClass = document.documentElement.classList.contains("dark");
-    setTheme(isDarkClass ? "dark" : "light");
-
-    // Task 8: Check backend health status on mount
-    const checkHealth = async () => {
-      const res = await fetchHealthStatus();
-      setBackendHealth(res);
-    };
-    checkHealth();
-
-    // Attach global clipboard paste listener for Ctrl+V image pastes
-    window.addEventListener("paste", handlePasteEvent);
-    return () => {
-      window.removeEventListener("paste", handlePasteEvent);
-    };
-  }, []);
-
-  const isDark = theme === "dark";
-
-  const toggleTheme = () => {
-    const root = document.documentElement;
-    const body = document.body;
-    if (theme === "dark") {
-      setTheme("light");
-      root.classList.add("light");
-      root.classList.remove("dark");
-      body.classList.add("light");
-      body.classList.remove("dark");
-    } else {
-      setTheme("dark");
-      root.classList.add("dark");
-      root.classList.remove("light");
-      body.classList.add("dark");
-      body.classList.remove("light");
-    }
-  };
-
-  const [chatHistories, setChatHistories] = useState([
-    { id: "chat-1", title: "New Satellite Analysis", date: "Today" },
-  ]);
-
-  // Clean initial state with NO pre-populated temporary demo messages
-  const [messages, setMessages] = useState([]);
 
   const presetSamples = [
     {
@@ -166,11 +218,56 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
+  // Switch Active Chat Session
+  const handleSwitchChat = (chatId) => {
+    setActiveChatId(chatId);
+    const targetSession = chatHistories.find((s) => s.id === chatId);
+    setMessages(targetSession ? targetSession.messages || [] : []);
+    setInputQuery("");
+    setAttachedImage(null);
+  };
+
+  // Start New Chat Session
   const handleNewChat = () => {
+    const newId = `chat-${Date.now()}`;
+    const newSession = {
+      id: newId,
+      title: "New Satellite Analysis",
+      date: "Today",
+      messages: [],
+    };
+    const updated = [newSession, ...chatHistories];
+    setChatHistories(updated);
+    setActiveChatId(newId);
     setMessages([]);
     setInputQuery("");
     setAttachedImage(null);
-    setActiveChatId(`chat-${Date.now()}`);
+    try {
+      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
+      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, newId);
+    } catch (e) {
+      console.error("Failed to save new chat to localStorage:", e);
+    }
+  };
+
+  // Delete Chat Session
+  const handleDeleteChat = (e, chatId) => {
+    e.stopPropagation();
+    const updated = chatHistories.filter((h) => h.id !== chatId);
+    if (updated.length === 0) {
+      handleNewChat();
+      return;
+    }
+    setChatHistories(updated);
+    if (activeChatId === chatId) {
+      setActiveChatId(updated[0].id);
+      setMessages(updated[0].messages || []);
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const executeQuery = async (queryText, fileObj, sampleImage) => {
@@ -349,7 +446,7 @@ export default function SatQueryDeepSeekChatPage() {
           </button>
         </div>
 
-        {/* Grouped Chat History List */}
+        {/* Grouped Persistent Chat History List */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
           {sidebarOpen ? (
             <>
@@ -366,27 +463,37 @@ export default function SatQueryDeepSeekChatPage() {
                     {items.map((h) => {
                       const isActive = activeChatId === h.id;
                       return (
-                        <button
-                          key={h.id}
-                          onClick={() => {
-                            setActiveChatId(h.id);
-                            if (window.innerWidth < 768) setSidebarOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold truncate transition-all flex items-center gap-2.5 ${
-                            isActive
-                              ? isDark
-                                ? "bg-violet-600/40 text-white border border-violet-500/50 shadow-md"
-                                : "bg-violet-100 text-violet-900 border border-violet-300 shadow-sm"
-                              : isDark
-                              ? "text-slate-200 hover:bg-white/10 hover:text-white"
-                              : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                          }`}
-                        >
-                          <MessageSquare className={`w-4 h-4 shrink-0 ${
-                            isActive ? "text-violet-600" : isDark ? "text-violet-400" : "text-slate-500"
-                          }`} />
-                          <span className="truncate">{h.title}</span>
-                        </button>
+                        <div key={h.id} className="relative group/item flex items-center">
+                          <button
+                            onClick={() => {
+                              handleSwitchChat(h.id);
+                              if (window.innerWidth < 768) setSidebarOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold truncate transition-all flex items-center gap-2.5 ${
+                              isActive
+                                ? isDark
+                                  ? "bg-violet-600/40 text-white border border-violet-500/50 shadow-md"
+                                  : "bg-violet-100 text-violet-900 border border-violet-300 shadow-sm"
+                                : isDark
+                                ? "text-slate-200 hover:bg-white/10 hover:text-white"
+                                : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                            }`}
+                          >
+                            <MessageSquare className={`w-4 h-4 shrink-0 ${
+                              isActive ? "text-violet-600" : isDark ? "text-violet-400" : "text-slate-500"
+                            }`} />
+                            <span className="truncate flex-1">{h.title}</span>
+                          </button>
+                          {chatHistories.length > 1 && (
+                            <button
+                              onClick={(e) => handleDeleteChat(e, h.id)}
+                              title="Delete chat"
+                              className="opacity-0 group-hover/item:opacity-100 absolute right-2 p-1 text-slate-400 hover:text-rose-500 transition-opacity"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -398,7 +505,7 @@ export default function SatQueryDeepSeekChatPage() {
               {chatHistories.slice(0, 5).map((h) => (
                 <button
                   key={h.id}
-                  onClick={() => setActiveChatId(h.id)}
+                  onClick={() => handleSwitchChat(h.id)}
                   title={h.title}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
                     activeChatId === h.id
