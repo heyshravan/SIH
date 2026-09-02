@@ -292,9 +292,9 @@ export default function SatQueryDeepSeekChatPage() {
     setIsGenerating(false);
   };
 
-  // Execute query passing AbortSignal to enable Stop functionality
-  const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
-    if (!queryText && !fileObj) return;
+  // Execute query passing AbortSignal and ensuring assistant response is always displayed
+  const executeQuery = async (queryText, fileObj, displayImageUrl, overrideTaskType, overrideMode) => {
+    if (!queryText && !fileObj && !displayImageUrl) return;
 
     setIsGenerating(true);
     const controller = new AbortController();
@@ -347,6 +347,12 @@ export default function SatQueryDeepSeekChatPage() {
       return;
     }
 
+    // Determine output display image URL
+    let resultImgUrl = displayImageUrl;
+    if (!resultImgUrl && fileObj) {
+      resultImgUrl = URL.createObjectURL(fileObj);
+    }
+
     if (apiRes.success && apiRes.data) {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
@@ -359,7 +365,7 @@ export default function SatQueryDeepSeekChatPage() {
         if (finalBoxes.length > 0) {
           cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} target region${finalBoxes.length > 1 ? "s" : ""}.`;
         } else {
-          cleanAnswerText = "No grounded region was detected.";
+          cleanAnswerText = "Grounding complete. GeoChat processed the satellite patch. No specific bounding boxes were detected for this prompt.";
         }
       }
 
@@ -369,10 +375,10 @@ export default function SatQueryDeepSeekChatPage() {
         model: backendData.specialist || (activeMode === "vision" || taskType === "grounding" ? "GeoChat-grounding" : "GeoChat-7B"),
         task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
-        thinking: agentThink ? (backendData.thinking || backendData.reasoning || "Reasoning trace active...") : null,
+        thinking: agentThink ? (backendData.thinking || backendData.reasoning || "Agentic reasoning complete.") : null,
         text: cleanAnswerText,
         boxes: finalBoxes,
-        resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
+        resultImage: resultImgUrl,
         status: backendData.status || null,
       };
       setMessages((prev) => [...prev, assistantMsg]);
@@ -889,11 +895,11 @@ export default function SatQueryDeepSeekChatPage() {
                           {msg.text}
                         </div>
 
-                        {/* Image Output Display & Bounding Box Overlay STRICTLY if API returned boxes */}
-                        {(msg.resultImage || (msg.boxes && msg.boxes.length > 0)) && (
+                        {/* Output Image Display & Bounding Box SVG Overlay */}
+                        {msg.resultImage && (
                           <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
                             <img
-                              src={msg.resultImage || msg.image}
+                              src={msg.resultImage}
                               alt="Satellite Output Patch"
                               className="w-full h-full object-cover"
                             />
