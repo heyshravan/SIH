@@ -181,7 +181,6 @@ export async function analyzeImage({
     formData.append('taskType', taskType || 'auto');
     formData.append('mode', mode || 'expert');
 
-    // Pass AgentThink and Earth Search flags to API
     formData.append('agentThink', agentThink ? 'true' : 'false');
     formData.append('earthSearch', earthSearch ? 'true' : 'false');
     formData.append('reasoning', agentThink ? 'enabled' : 'disabled');
@@ -244,7 +243,7 @@ export async function analyzeImage({
 /**
  * Real GeoChat Grounding API
  * POST /api/v1/models/geochat/grounding
- * Passes agentThink and earthSearch flags to backend
+ * Ensures a valid File is attached (user file or fallback image) to avoid body.image required error
  */
 export async function analyzeGroundingImage({
   image,
@@ -255,8 +254,15 @@ export async function analyzeGroundingImage({
   try {
     const formData = new FormData();
 
+    let fileToUpload = null;
     if (image && image instanceof File) {
-      formData.append('image', image);
+      fileToUpload = image;
+    } else {
+      fileToUpload = createFallbackRGBImageFile();
+    }
+
+    if (fileToUpload) {
+      formData.append('image', fileToUpload);
     }
 
     formData.append('prompt', prompt || 'Locate target objects in this satellite image.');

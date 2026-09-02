@@ -69,7 +69,7 @@ export default function SatQueryDeepSeekChatPage() {
   const [messages, setMessages] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Specialized Model & Remote Sensing Topics (Pure Text Topics - No Image Attachment)
+  // Specialized Remote Sensing Topics
   const presetSamples = [
     {
       id: "grounding",
@@ -375,7 +375,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
 
     setMessages((prev) => prev.filter((m) => m.id !== errorOrAssistantMsg.id));
-    executeQuery(targetQuery, null, targetImage);
+    executeQuery(targetQuery, attachedImage?.file || null, targetImage);
   };
 
   const handleSendMessage = () => {
@@ -398,22 +398,18 @@ export default function SatQueryDeepSeekChatPage() {
     executeQuery(currentQuery, currentImg?.file, currentImg?.url);
   };
 
-  // Pure Text Preset Topic Chips (No Image Attachment)
+  // Preset topic selection populates the prompt query & opens file browser for image attachment
   const handlePresetClick = (sample) => {
     if (sample.mode) {
       setMode(sample.mode);
     }
+    // Populate query into input box
+    setInputQuery(sample.query);
 
-    const userMsg = {
-      id: `user-${Date.now()}`,
-      sender: "user",
-      text: sample.query,
-      image: null,
-      imageName: null,
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
-    executeQuery(sample.query, null, null, sample.taskType, sample.mode || mode);
+    // If user has not attached an image yet, open file input selector
+    if (!attachedImage && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   return (
