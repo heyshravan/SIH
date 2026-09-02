@@ -49,6 +49,8 @@ import {
   Building2,
   Sparkle,
   ArrowRight,
+  Check,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
@@ -193,6 +195,12 @@ function ChatContent() {
   const [backendHealth, setBackendHealth] = useState({ healthy: null, status: "checking" });
   const [pasteNotification, setPasteNotification] = useState(false);
 
+  // Action Buttons States & Handlers
+  const [copiedMsgId, setCopiedMsgId] = useState(null);
+  const [feedbackMap, setFeedbackMap] = useState({}); // { [msgId]: 'up' | 'down' }
+  const [openMenuMsgId, setOpenMenuMsgId] = useState(null);
+  const [actionToast, setActionToast] = useState(null);
+
   const fileInputRef = useRef(null);
   const fileInputRef2 = useRef(null);
   const abortControllerRef = useRef(null);
@@ -203,6 +211,68 @@ function ChatContent() {
   ]);
   const [messages, setMessages] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Toast Trigger Helper
+  const showToast = (text) => {
+    setActionToast(text);
+    setTimeout(() => setActionToast(null), 3000);
+  };
+
+  const handleCopyMessage = (msgId, text) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text || "");
+    }
+    setCopiedMsgId(msgId);
+    showToast("Copied analysis text to clipboard!");
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
+  const handleFeedback = (msgId, type) => {
+    setFeedbackMap((prev) => ({
+      ...prev,
+      [msgId]: prev[msgId] === type ? null : type,
+    }));
+    showToast(type === "up" ? "Feedback recorded: Helpful! 👍" : "Feedback recorded: Unhelpful 👎");
+  };
+
+  const handleShareMessage = async (msg) => {
+    const shareData = {
+      title: "SatQuery AI Satellite Analysis",
+      text: msg.text || "SatQuery AI Remote Sensing Query",
+      url: window.location.href,
+    };
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        showToast("Shared analysis successfully!");
+        return;
+      } catch (e) {
+        // Fallback to clipboard
+      }
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(`${msg.text}\n\nAnalyzed with SatQuery AI`);
+    }
+    showToast("Analysis text copied to clipboard!");
+  };
+
+  const handleDownloadAnalysis = (msg) => {
+    const element = document.createElement("a");
+    const file = new Blob([JSON.stringify(msg, null, 2)], { type: "application/json" });
+    element.href = URL.createObjectURL(file);
+    element.download = `SatQuery_Analysis_${msg.id}.json`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    setOpenMenuMsgId(null);
+    showToast("Downloaded analysis report JSON!");
+  };
+
+  const handleDeleteSingleMessage = (msgId) => {
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    setOpenMenuMsgId(null);
+    showToast("Message removed.");
+  };
 
   // Premium Specialized Remote Sensing Topics
   const presetSamples = [
@@ -700,6 +770,14 @@ function ChatContent() {
         className="hidden"
       />
 
+      {/* Action Notification Toast */}
+      {actionToast && (
+        <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-extrabold text-xs shadow-2xl flex items-center gap-2 animate-bounce border border-white/20">
+          <Sparkles className="w-4 h-4 text-violet-400" />
+          <span>{actionToast}</span>
+        </div>
+      )}
+
       {/* Clipboard Image Paste Notification Toast */}
       {pasteNotification && (
         <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-emerald-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
@@ -1117,7 +1195,7 @@ function ChatContent() {
 
                 {/* Assistant Response Layout */}
                 {msg.sender === "assistant" && (
-                  <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl">
+                  <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl relative">
                     {msg.isError ? (
                       /* Error Bubble with Try Again Button */
                       <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 text-sm font-medium flex items-center justify-between gap-4 w-full">
@@ -1218,26 +1296,105 @@ function ChatContent() {
                           </div>
                         )}
 
-                        {/* Action Icons Row */}
-                        <div className="flex items-center gap-3 pt-1 text-slate-400 dark:text-slate-500">
-                          <button onClick={() => navigator.clipboard.writeText(msg.text)} title="Copy" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                            <Copy className="w-4 h-4" />
+                        {/* Interactive Action Icons Row */}
+                        <div className="flex items-center gap-3 pt-1 text-slate-400 dark:text-slate-500 relative">
+                          {/* 1. Copy Button */}
+                          <button
+                            onClick={() => handleCopyMessage(msg.id, msg.text)}
+                            title="Copy analysis text"
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              copiedMsgId === msg.id
+                                ? "text-emerald-500 bg-emerald-500/10"
+                                : "hover:text-slate-700 dark:hover:text-slate-200"
+                            }`}
+                          >
+                            {copiedMsgId === msg.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                           </button>
-                          <button title="Thumbs Up" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                            <ThumbsUp className="w-4 h-4" />
+
+                          {/* 2. Thumbs Up */}
+                          <button
+                            onClick={() => handleFeedback(msg.id, "up")}
+                            title="Helpful"
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              feedbackMap[msg.id] === "up"
+                                ? "text-emerald-500 bg-emerald-500/10"
+                                : "hover:text-slate-700 dark:hover:text-slate-200"
+                            }`}
+                          >
+                            <ThumbsUp className={`w-4 h-4 ${feedbackMap[msg.id] === "up" ? "fill-current" : ""}`} />
                           </button>
-                          <button title="Thumbs Down" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                            <ThumbsDown className="w-4 h-4" />
+
+                          {/* 3. Thumbs Down */}
+                          <button
+                            onClick={() => handleFeedback(msg.id, "down")}
+                            title="Unhelpful"
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              feedbackMap[msg.id] === "down"
+                                ? "text-rose-500 bg-rose-500/10"
+                                : "hover:text-slate-700 dark:hover:text-slate-200"
+                            }`}
+                          >
+                            <ThumbsDown className={`w-4 h-4 ${feedbackMap[msg.id] === "down" ? "fill-current" : ""}`} />
                           </button>
-                          <button onClick={() => handleRetryMessage(msg)} title="Try Again / Regenerate" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+
+                          {/* 4. Regenerate / Try Again */}
+                          <button
+                            onClick={() => handleRetryMessage(msg)}
+                            title="Regenerate analysis"
+                            className="p-1.5 rounded-lg hover:text-slate-700 dark:hover:text-slate-200 transition-colors active:rotate-180 transition-transform duration-300"
+                          >
                             <RotateCcw className="w-4 h-4" />
                           </button>
-                          <button title="Share" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+
+                          {/* 5. Share */}
+                          <button
+                            onClick={() => handleShareMessage(msg)}
+                            title="Share analysis"
+                            className="p-1.5 rounded-lg hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                          >
                             <Share2 className="w-4 h-4" />
                           </button>
-                          <button title="More" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
+
+                          {/* 6. More Dropdown Menu */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenMenuMsgId(openMenuMsgId === msg.id ? null : msg.id)}
+                              title="More options"
+                              className="p-1.5 rounded-lg hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+
+                            {openMenuMsgId === msg.id && (
+                              <div className={`absolute left-0 bottom-8 z-30 w-48 rounded-xl border shadow-xl p-1.5 space-y-1 text-xs font-bold ${
+                                isDark
+                                  ? "bg-[#141628] border-violet-500/30 text-white"
+                                  : "bg-white border-slate-200 text-slate-800"
+                              }`}>
+                                <button
+                                  onClick={() => handleDownloadAnalysis(msg)}
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-violet-600/20 flex items-center gap-2"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-cyan-400" />
+                                  <span>Download Report JSON</span>
+                                </button>
+                                <button
+                                  onClick={() => handleCopyMessage(msg.id, JSON.stringify(msg, null, 2))}
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-violet-600/20 flex items-center gap-2"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-violet-400" />
+                                  <span>Copy Raw JSON</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSingleMessage(msg.id)}
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-rose-500/20 text-rose-500 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete Message</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
