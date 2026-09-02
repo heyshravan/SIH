@@ -152,11 +152,16 @@ function createFallbackRGBImageFile() {
 /**
  * Main Agent Query API (VQA & General Queries)
  * POST /api/v1/agent/query
- *
- * Sends multipart/form-data with image, prompt, taskType, and mode.
- * Note: Do NOT manually set Content-Type header so browser sets multipart boundary automatically.
+ * Passes agentThink and earthSearch parameters to FastAPI backend
  */
-export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'expert' }) {
+export async function analyzeImage({
+  image,
+  prompt,
+  taskType = 'auto',
+  mode = 'expert',
+  agentThink = true,
+  earthSearch = false,
+}) {
   try {
     const formData = new FormData();
 
@@ -175,6 +180,11 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
     formData.append('prompt', textPrompt);
     formData.append('taskType', taskType || 'auto');
     formData.append('mode', mode || 'expert');
+
+    // Pass AgentThink and Earth Search flags to API
+    formData.append('agentThink', agentThink ? 'true' : 'false');
+    formData.append('earthSearch', earthSearch ? 'true' : 'false');
+    formData.append('reasoning', agentThink ? 'enabled' : 'disabled');
 
     const response = await fetch(`${API_BASE_URL}/api/v1/agent/query`, {
       method: 'POST',
@@ -234,11 +244,14 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
 /**
  * Real GeoChat Grounding API
  * POST /api/v1/models/geochat/grounding
- *
- * Sends multipart/form-data with image and prompt.
- * Returns JSON with boxes array: [{ x1, y1, x2, y2, label, confidence }]
+ * Passes agentThink and earthSearch flags to backend
  */
-export async function analyzeGroundingImage({ image, prompt }) {
+export async function analyzeGroundingImage({
+  image,
+  prompt,
+  agentThink = true,
+  earthSearch = false,
+}) {
   try {
     const formData = new FormData();
 
@@ -247,6 +260,8 @@ export async function analyzeGroundingImage({ image, prompt }) {
     }
 
     formData.append('prompt', prompt || 'Locate target objects in this satellite image.');
+    formData.append('agentThink', agentThink ? 'true' : 'false');
+    formData.append('earthSearch', earthSearch ? 'true' : 'false');
 
     const response = await fetch(`${API_BASE_URL}/api/v1/models/geochat/grounding`, {
       method: 'POST',

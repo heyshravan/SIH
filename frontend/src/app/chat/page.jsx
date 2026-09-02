@@ -69,13 +69,12 @@ export default function SatQueryDeepSeekChatPage() {
   const [messages, setMessages] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Specialized Model & Remote Sensing Topics
+  // Specialized Model & Remote Sensing Topics (Pure Text Topics - No Image Attachment)
   const presetSamples = [
     {
       id: "grounding",
       name: "🚢 Ground Harbor Vessels",
       query: "Locate all cargo ships and harbor buildings in this satellite patch.",
-      image: "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80",
       taskType: "grounding",
       mode: "vision",
     },
@@ -83,7 +82,6 @@ export default function SatQueryDeepSeekChatPage() {
       id: "change",
       name: "🔄 Bi-Temporal Urban Change",
       query: "Compare T1 vs T2 imagery to detect new infrastructure constructions.",
-      image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80",
       taskType: "change",
       mode: "expert",
     },
@@ -91,7 +89,6 @@ export default function SatQueryDeepSeekChatPage() {
       id: "fusion",
       name: "🛰️ Optical + SAR Fusion",
       query: "Fuse Sentinel-1 C-band radar with Sentinel-2 optical bands to penetrate cloud cover.",
-      image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
       taskType: "fusion",
       mode: "expert",
     },
@@ -99,7 +96,6 @@ export default function SatQueryDeepSeekChatPage() {
       id: "vrsbench",
       name: "📊 VRSBench Benchmark",
       query: "Run evaluation on VRSBench VQA and spatial grounding test split.",
-      image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
       taskType: "vqa",
       mode: "expert",
     },
@@ -285,7 +281,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with STRICT API response box parsing
+  // Execute query passing AgentThink and Earth Search flags to API
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -308,6 +304,8 @@ export default function SatQueryDeepSeekChatPage() {
       apiRes = await analyzeGroundingImage({
         image: fileObj || null,
         prompt: queryText || "Locate target objects in this satellite image.",
+        agentThink,
+        earthSearch,
       });
     } else {
       apiRes = await analyzeImage({
@@ -315,6 +313,8 @@ export default function SatQueryDeepSeekChatPage() {
         prompt: queryText || "Analyze satellite imagery.",
         taskType,
         mode: activeMode,
+        agentThink,
+        earthSearch,
       });
     }
 
@@ -340,7 +340,7 @@ export default function SatQueryDeepSeekChatPage() {
         model: backendData.specialist || (activeMode === "vision" || taskType === "grounding" ? "GeoChat-grounding" : "GeoChat-7B"),
         task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
-        thinking: backendData.thinking || backendData.reasoning || null,
+        thinking: agentThink ? (backendData.thinking || backendData.reasoning || "Reasoning trace active...") : null,
         text: cleanAnswerText,
         boxes: finalBoxes,
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
@@ -362,7 +362,6 @@ export default function SatQueryDeepSeekChatPage() {
     setIsGenerating(false);
   };
 
-  // Retry query handler for Try Again button
   const handleRetryMessage = (errorOrAssistantMsg) => {
     const msgIdx = messages.findIndex((m) => m.id === errorOrAssistantMsg.id);
     let targetQuery = "";
@@ -375,7 +374,6 @@ export default function SatQueryDeepSeekChatPage() {
       targetQuery = inputQuery || "Analyze satellite imagery.";
     }
 
-    // Remove failed message and re-execute query
     setMessages((prev) => prev.filter((m) => m.id !== errorOrAssistantMsg.id));
     executeQuery(targetQuery, null, targetImage);
   };
@@ -400,6 +398,7 @@ export default function SatQueryDeepSeekChatPage() {
     executeQuery(currentQuery, currentImg?.file, currentImg?.url);
   };
 
+  // Pure Text Preset Topic Chips (No Image Attachment)
   const handlePresetClick = (sample) => {
     if (sample.mode) {
       setMode(sample.mode);
@@ -409,12 +408,12 @@ export default function SatQueryDeepSeekChatPage() {
       id: `user-${Date.now()}`,
       sender: "user",
       text: sample.query,
-      image: sample.image,
-      imageName: sample.name,
+      image: null,
+      imageName: null,
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    executeQuery(sample.query, null, sample.image, sample.taskType, sample.mode || mode);
+    executeQuery(sample.query, null, null, sample.taskType, sample.mode || mode);
   };
 
   return (
@@ -987,7 +986,7 @@ export default function SatQueryDeepSeekChatPage() {
             </div>
           )}
 
-          {/* DeepSeek Floating Textarea Container with Clipboard Paste Handler */}
+          {/* DeepSeek Floating Textarea Container */}
           <div className={`rounded-3xl p-3 sm:p-4 shadow-2xl border transition-colors space-y-3 ${
             isDark
               ? "bg-[#141628] border-violet-500/40 text-white"
@@ -1004,7 +1003,7 @@ export default function SatQueryDeepSeekChatPage() {
                   if (!isGenerating) handleSendMessage();
                 }
               }}
-              placeholder="Message SatQuery AI or paste a satellite image from clipboard (Ctrl + V)..."
+              placeholder="Ask SatQuery AI or paste satellite imagery..."
               className="w-full bg-transparent text-xs sm:text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
             />
 
