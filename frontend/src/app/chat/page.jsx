@@ -400,11 +400,23 @@ function ChatContent() {
     abortControllerRef.current = controller;
 
     const activeMode = overrideMode || mode;
+    const lowerQuery = (queryText || "").toLowerCase();
+    const isGroundingIntent =
+      lowerQuery.includes("highlight") ||
+      lowerQuery.includes("find") ||
+      lowerQuery.includes("locate") ||
+      lowerQuery.includes("detect") ||
+      lowerQuery.includes("where") ||
+      lowerQuery.includes("ground") ||
+      lowerQuery.includes("mark") ||
+      lowerQuery.includes("box") ||
+      lowerQuery.includes("show");
+
     let taskType = overrideTaskType;
     if (!taskType) {
       if (changeDetectionMode) {
         taskType = "change";
-      } else if (activeMode === "vision") {
+      } else if (activeMode === "vision" || isGroundingIntent) {
         taskType = "grounding";
       } else {
         taskType = "vqa";
@@ -412,7 +424,7 @@ function ChatContent() {
     }
 
     let apiRes;
-    if (taskType === "grounding" || activeMode === "vision") {
+    if (taskType === "grounding" || activeMode === "vision" || isGroundingIntent) {
       apiRes = await analyzeGroundingImage({
         image: fileObj || null,
         prompt: queryText || "Locate target objects in this satellite image.",
@@ -495,8 +507,8 @@ function ChatContent() {
       const assistantMsg = {
         id: `asst-${Date.now()}`,
         sender: "assistant",
-        model: backendData.specialist || (taskType === "change" ? "GeoChat-ChangeDetection" : activeMode === "vision" ? "GeoChat-grounding" : "GeoChat-7B"),
-        task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
+        model: backendData.specialist || (taskType === "change" ? "GeoChat-ChangeDetection" : (activeMode === "vision" || isGroundingIntent) ? "GeoChat-grounding" : "GeoChat-7B"),
+        task: (isGroundingIntent || taskType === "grounding") ? "GROUNDING" : backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
         thinking: agentThink ? reasoningText : null,
         text: cleanAnswerText,
