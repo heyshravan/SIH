@@ -307,7 +307,6 @@ export default function SatQueryDeepSeekChatPage() {
     }
 
     let apiRes;
-    // Task 3: Call real GeoChat Grounding endpoint POST /api/v1/models/geochat/grounding when taskType is grounding
     if (taskType === "grounding" || activeMode === "vision") {
       apiRes = await analyzeGroundingImage({
         image: fileObj || null,
@@ -325,16 +324,17 @@ export default function SatQueryDeepSeekChatPage() {
     if (apiRes.success && apiRes.data) {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message;
+      let cleanAnswerText = cleanHtmlResponse(rawAnswer);
       
-      if (!rawAnswer) {
+      // Fix: If answer was only raw coordinate tokens like "{<0><48>...}" or empty "{}"
+      if (!cleanAnswerText || cleanAnswerText === "{}" || cleanAnswerText === "{|}" || cleanAnswerText === "{ }") {
         if (backendData.boxes && backendData.boxes.length > 0) {
-          rawAnswer = `Detected ${backendData.boxes.length} grounded region(s) in the satellite patch.`;
+          const boxCount = backendData.boxes.length;
+          cleanAnswerText = `Spatial grounding detected ${boxCount} target region${boxCount > 1 ? "s" : ""}.`;
         } else {
-          rawAnswer = "No grounded region was detected.";
+          cleanAnswerText = "No grounded region was detected.";
         }
       }
-      
-      const cleanAnswerText = cleanHtmlResponse(rawAnswer);
 
       const assistantMsg = {
         id: `asst-${Date.now()}`,
@@ -748,7 +748,7 @@ export default function SatQueryDeepSeekChatPage() {
           </div>
         )}
 
-        {/* Messages Thread (Real GeoChat Bounding Boxes SVG Overlay) */}
+        {/* Messages Thread */}
         {messages.length > 0 && (
           <div className="flex-1 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
             {/* Mode Switcher Banner */}
@@ -835,14 +835,14 @@ export default function SatQueryDeepSeekChatPage() {
                           </div>
                         )}
 
-                        {/* Plain Clean Assistant Answer Text */}
+                        {/* Plain Clean Assistant Answer Text (No Raw Token Artifacts) */}
                         <div className={`text-sm sm:text-base leading-relaxed font-normal ${
                           isDark ? "text-slate-100" : "text-slate-900"
                         }`}>
                           {msg.text}
                         </div>
 
-                        {/* REAL GeoChat-7B Grounding Bounding Box SVG Overlay (Steps 4, 5, 6, 7) */}
+                        {/* REAL GeoChat-7B Grounding Bounding Box SVG Overlay */}
                         {msg.boxes && msg.boxes.length > 0 && (
                           <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
                             <img
@@ -857,7 +857,6 @@ export default function SatQueryDeepSeekChatPage() {
                               preserveAspectRatio="none"
                             >
                               {msg.boxes.map((box, bIdx) => {
-                                // Task 4 & 5: Backend returns pixel coordinates x1, y1, x2, y2
                                 const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
                                 const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
                                 const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));

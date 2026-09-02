@@ -14,17 +14,29 @@ const getApiBaseUrl = () => {
 export const API_BASE_URL = getApiBaseUrl();
 
 /**
- * Strip HTML tags (<p>, <div>, etc.) and decode HTML entities from text
+ * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens ({<0><48>...})
  */
 export function cleanHtmlResponse(text) {
   if (!text || typeof text !== 'string') return '';
-  let clean = text.replace(/<[^>]*>?/gm, '').trim();
+
+  // 1. Remove raw GeoChat coordinate token strings like {<0><48><62><92>|<90>}
+  let clean = text.replace(/\{<[^>]*>\}/g, '').trim();
+
+  // 2. Strip standard HTML tags (<p>, <div>, <span>, <br>, etc.)
+  clean = clean.replace(/<\/?(p|div|span|br|b|i|strong|em|h[1-6]|ul|ol|li|a)[^>]*>/gi, '').trim();
+
+  // 3. Remove raw leftover brackets
+  if (clean === '{}' || clean === '{|}' || clean === '{}|{}' || clean === '{ }') {
+    clean = '';
+  }
+
   clean = clean
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"');
+
   return clean;
 }
 
