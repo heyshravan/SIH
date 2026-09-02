@@ -14,7 +14,54 @@ const getApiBaseUrl = () => {
 export const API_BASE_URL = getApiBaseUrl();
 
 /**
- * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens ({<0><48>...})
+ * Parse GeoChat token coordinate strings like {<40><55><52><59>|<90>} or {<40><55><52><59>}
+ * into real bounding boxes [{ x1, y1, x2, y2, label, confidence }]
+ */
+export function parseGeoChatBoxes(text) {
+  if (!text || typeof text !== 'string') return { cleanText: '', parsedBoxes: [] };
+
+  const parsedBoxes = [];
+  const tokenRegex = /\{<(\d+)><(\d+)><(\d+)><(\d+)>(?:\|<(\d+)>)?\}/g;
+
+  let match;
+  let cleanText = text;
+
+  while ((match = tokenRegex.exec(text)) !== null) {
+    const y1Token = parseInt(match[1], 10);
+    const x1Token = parseInt(match[2], 10);
+    const y2Token = parseInt(match[3], 10);
+    const x2Token = parseInt(match[4], 10);
+    const confToken = match[5] ? parseInt(match[5], 10) : null;
+
+    // GeoChat token coordinates are normalized 0-1000 or 0-100
+    const scale = y1Token > 100 || x1Token > 100 || y2Token > 100 || x2Token > 100 ? 10 : 1;
+
+    const y1 = y1Token / scale;
+    const x1 = x1Token / scale;
+    const y2 = y2Token / scale;
+    const x2 = x2Token / scale;
+
+    parsedBoxes.push({
+      x1,
+      y1,
+      x2,
+      y2,
+      x: x1,
+      y: y1,
+      width: Math.max(1, x2 - x1),
+      height: Math.max(1, y2 - y1),
+      label: 'Grounded Object',
+      confidence: confToken,
+    });
+  }
+
+  cleanText = cleanText.replace(tokenRegex, '').trim();
+
+  return { cleanText, parsedBoxes };
+}
+
+/**
+ * Strip HTML tags (<p>, <div>, etc.) and raw GeoChat coordinate tokens
  */
 export function cleanHtmlResponse(text) {
   if (!text || typeof text !== 'string') return '';
@@ -114,7 +161,6 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
   try {
     const formData = new FormData();
 
-    // 1. Image file handling: use user-uploaded File or generate valid 224x224 RGB PNG for FastAPI UploadFile requirement
     let fileToUpload = null;
     if (image && image instanceof File) {
       fileToUpload = image;
@@ -126,11 +172,8 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
       formData.append('image', fileToUpload);
     }
 
-    // 2. Prompt text handling
     const textPrompt = prompt || 'Analyze this satellite imagery.';
     formData.append('prompt', textPrompt);
-
-    // 3. Task type & Mode parameters
     formData.append('taskType', taskType || 'auto');
     formData.append('mode', mode || 'expert');
 

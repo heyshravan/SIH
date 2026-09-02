@@ -43,7 +43,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import Link from "next/link";
-import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse } from "@/lib/api";
+import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
 
 const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
@@ -113,14 +113,12 @@ export default function SatQueryDeepSeekChatPage() {
     const isDarkClass = document.documentElement.classList.contains("dark");
     setTheme(isDarkClass ? "dark" : "light");
 
-    // Task 8: Check backend health status
     const checkHealth = async () => {
       const res = await fetchHealthStatus();
       setBackendHealth(res);
     };
     checkHealth();
 
-    // Load stored chat sessions from localStorage
     try {
       const savedSessions = localStorage.getItem(STORAGE_KEY_SESSIONS);
       const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE_ID);
@@ -148,7 +146,6 @@ export default function SatQueryDeepSeekChatPage() {
     }
     setIsInitialized(true);
 
-    // Attach global clipboard paste listener for Ctrl+V image pastes
     window.addEventListener("paste", handlePasteEvent);
     return () => {
       window.removeEventListener("paste", handlePasteEvent);
@@ -200,7 +197,6 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Clipboard Paste Image Listener for Ctrl+V
   const handlePasteEvent = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -288,7 +284,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with REAL GeoChat Grounding & VQA task routing
+  // Execute query with GeoChat Coordinate Token Parsing
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -323,14 +319,18 @@ export default function SatQueryDeepSeekChatPage() {
 
     if (apiRes.success && apiRes.data) {
       const backendData = apiRes.data;
-      let rawAnswer = backendData.answer || backendData.response || backendData.message;
-      let cleanAnswerText = cleanHtmlResponse(rawAnswer);
+      let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
       
-      // Fix: If answer was only raw coordinate tokens like "{<0><48>...}" or empty "{}"
-      if (!cleanAnswerText || cleanAnswerText === "{}" || cleanAnswerText === "{|}" || cleanAnswerText === "{ }") {
-        if (backendData.boxes && backendData.boxes.length > 0) {
-          const boxCount = backendData.boxes.length;
-          cleanAnswerText = `Spatial grounding detected ${boxCount} target region${boxCount > 1 ? "s" : ""}.`;
+      // Parse raw GeoChat coordinate tokens like {<40><55><52><59>|<90>}
+      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer);
+
+      // Combine backend boxes with parsed coordinate token boxes
+      const finalBoxes = [...(backendData.boxes || []), ...parsedBoxes];
+
+      let cleanAnswerText = cleanHtmlResponse(cleanText);
+      if (!cleanAnswerText) {
+        if (finalBoxes.length > 0) {
+          cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} target region${finalBoxes.length > 1 ? "s" : ""}.`;
         } else {
           cleanAnswerText = "No grounded region was detected.";
         }
@@ -344,7 +344,7 @@ export default function SatQueryDeepSeekChatPage() {
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
         text: cleanAnswerText,
-        boxes: backendData.boxes || [], // Real bounding boxes returned by backend [{ x1, y1, x2, y2, label, confidence }]
+        boxes: finalBoxes, // Parsed & Backend boxes
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
       };
@@ -466,7 +466,6 @@ export default function SatQueryDeepSeekChatPage() {
             )}
           </Link>
 
-          {/* Close button for Mobile Drawer */}
           <button
             onClick={() => setSidebarOpen(false)}
             className="md:hidden p-1 rounded-lg text-slate-400 hover:text-white"
@@ -835,66 +834,66 @@ export default function SatQueryDeepSeekChatPage() {
                           </div>
                         )}
 
-                        {/* Plain Clean Assistant Answer Text (No Raw Token Artifacts) */}
+                        {/* Plain Clean Assistant Answer Text */}
                         <div className={`text-sm sm:text-base leading-relaxed font-normal ${
                           isDark ? "text-slate-100" : "text-slate-900"
                         }`}>
                           {msg.text}
                         </div>
 
-                        {/* REAL GeoChat-7B Grounding Bounding Box SVG Overlay */}
-                        {msg.boxes && msg.boxes.length > 0 && (
+                        {/* Real GeoChat-7B Grounding Bounding Box SVG Overlay */}
+                        {((msg.boxes && msg.boxes.length > 0) || msg.resultImage) && (
                           <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
                             <img
-                              src={msg.resultImage}
+                              src={msg.resultImage || msg.image || "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80"}
                               alt="Grounded Output Patch"
                               className="w-full h-full object-cover"
                             />
 
-                            <svg
-                              className="absolute inset-0 w-full h-full pointer-events-none"
-                              viewBox="0 0 100 100"
-                              preserveAspectRatio="none"
-                            >
-                              {msg.boxes.map((box, bIdx) => {
-                                const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
-                                const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
-                                const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
-                                const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
-                                const width = Math.max(1, x2 - x1);
-                                const height = Math.max(1, y2 - y1);
+                            {msg.boxes && msg.boxes.length > 0 && (
+                              <svg
+                                className="absolute inset-0 w-full h-full pointer-events-none"
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                              >
+                                {msg.boxes.map((box, bIdx) => {
+                                  const x1 = box.x1 !== undefined ? box.x1 : (box.x || 0);
+                                  const y1 = box.y1 !== undefined ? box.y1 : (box.y || 0);
+                                  const x2 = box.x2 !== undefined ? box.x2 : (x1 + (box.width || 0));
+                                  const y2 = box.y2 !== undefined ? box.y2 : (y1 + (box.height || 0));
+                                  const width = Math.max(1, x2 - x1);
+                                  const height = Math.max(1, y2 - y1);
 
-                                return (
-                                  <g key={bIdx}>
-                                    <rect
-                                      x={x1}
-                                      y={y1}
-                                      width={width}
-                                      height={height}
-                                      fill="rgba(139, 92, 246, 0.25)"
-                                      stroke="#a78bfa"
-                                      strokeWidth="2"
-                                      strokeDasharray="4 2"
-                                    />
-                                    {box.label && (
+                                  return (
+                                    <g key={bIdx}>
+                                      <rect
+                                        x={x1}
+                                        y={y1}
+                                        width={width}
+                                        height={height}
+                                        fill="rgba(59, 130, 246, 0.25)"
+                                        stroke="#3b82f6"
+                                        strokeWidth="2.5"
+                                        strokeDasharray="4 2"
+                                      />
                                       <foreignObject
                                         x={x1}
                                         y={Math.max(0, y1 - 8)}
-                                        width="120"
+                                        width="130"
                                         height="30"
                                       >
-                                        <div className="bg-violet-950/90 text-violet-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-violet-400/50 inline-flex items-center gap-1 shadow-lg">
-                                          <span>{box.label}</span>
+                                        <div className="bg-blue-950/90 text-blue-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/50 inline-flex items-center gap-1 shadow-lg font-bold">
+                                          <span>{box.label || "Grounded Region"}</span>
                                           {box.confidence && (
                                             <span className="text-cyan-300 font-bold">{box.confidence}%</span>
                                           )}
                                         </div>
                                       </foreignObject>
-                                    )}
-                                  </g>
-                                );
-                              })}
-                            </svg>
+                                    </g>
+                                  );
+                                })}
+                              </svg>
+                            )}
                           </div>
                         )}
 
