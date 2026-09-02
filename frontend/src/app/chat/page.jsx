@@ -90,41 +90,12 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  const chatHistories = [
-    { id: "chat-1", title: "Visakhapatnam Ship Grounding", date: "Today" },
-    { id: "chat-2", title: "Punjab Crop Density VQA", date: "Today" },
-    { id: "chat-3", title: "Kakinada SEZ Change Analysis", date: "Yesterday" },
-    { id: "chat-4", title: "Sentinel-1/2 SAR Fusion Test", date: "Yesterday" },
-    { id: "chat-5", title: "ISRO Cartosat-2S Verification", date: "Previous 30 Days" },
-    { id: "chat-6", title: "VRSBench Baseline Benchmark", date: "Previous 30 Days" },
-  ];
-
-  const [messages, setMessages] = useState([
-    {
-      id: "msg-1",
-      sender: "user",
-      text: "Locate all cargo vessels and commercial port infrastructure in this Visakhapatnam satellite patch.",
-      image: "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80",
-      imageName: "visakhapatnam_sentinel2_optical.tif",
-    },
-    {
-      id: "msg-2",
-      sender: "assistant",
-      model: "Adapted GeoChat-7B (BigEarthNet QLoRA)",
-      task: "Object Grounding & Spatial VQA",
-      confidence: 95.8,
-      thinking:
-        "1. Inspected 10m Sentinel-2 optical image.\n2. Agent Controller routed query to GeoChat-7B Grounding Specialist.\n3. Identified 4 cargo vessels and 6 port buildings with coordinate bounding boxes.\n4. Verified against ISRO Cartosat spatial baseline.",
-      text: "Identified 4 commercial cargo vessels docked in the bay and 6 warehouse buildings along the eastern container terminal.",
-      boxes: [
-        { label: "Building 1", x: 120, y: 80, width: 90, height: 60, score: "96%" },
-        { label: "Vessel 1", x: 260, y: 190, width: 110, height: 45, score: "95%" },
-        { label: "Vessel 2", x: 410, y: 220, width: 85, height: 40, score: "93%" },
-        { label: "Building 2", x: 150, y: 290, width: 100, height: 75, score: "94%" },
-      ],
-      resultImage: "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80",
-    },
+  const [chatHistories, setChatHistories] = useState([
+    { id: "chat-1", title: "New Satellite Analysis", date: "Today" },
   ]);
+
+  // Clean initial state with NO pre-populated temporary demo messages
+  const [messages, setMessages] = useState([]);
 
   const presetSamples = [
     {
