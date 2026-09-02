@@ -284,7 +284,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with GeoChat Coordinate Token & Spatial Inference Parsing
+  // Execute query with STRICT API response box parsing (0 fallback boxes)
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -306,7 +306,7 @@ export default function SatQueryDeepSeekChatPage() {
     if (taskType === "grounding" || activeMode === "vision") {
       apiRes = await analyzeGroundingImage({
         image: fileObj || null,
-        prompt: queryText || "Locate the agricultural land in this satellite image.",
+        prompt: queryText || "Locate target objects in this satellite image.",
       });
     } else {
       apiRes = await analyzeImage({
@@ -321,10 +321,10 @@ export default function SatQueryDeepSeekChatPage() {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
       
-      // Parse raw GeoChat coordinate tokens OR infer spatial description boxes
-      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer, queryText);
+      // Parse raw GeoChat coordinate tokens ONLY if returned by API
+      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer);
 
-      // Combine backend boxes with parsed coordinate token & spatial description boxes
+      // Strict API returned boxes array ONLY
       const finalBoxes = [...(backendData.boxes || []), ...parsedBoxes];
 
       let cleanAnswerText = cleanHtmlResponse(cleanText || rawAnswer);
@@ -344,7 +344,7 @@ export default function SatQueryDeepSeekChatPage() {
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
         text: cleanAnswerText,
-        boxes: finalBoxes,
+        boxes: finalBoxes, // Strictly API returned boxes
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
       };
@@ -841,15 +841,16 @@ export default function SatQueryDeepSeekChatPage() {
                           {msg.text}
                         </div>
 
-                        {/* Real GeoChat-7B Grounding Bounding Box SVG Overlay */}
-                        {((msg.boxes && msg.boxes.length > 0) || msg.resultImage) && (
+                        {/* Image Output Display & Bounding Box Overlay STRICTLY if API returned boxes */}
+                        {(msg.resultImage || (msg.boxes && msg.boxes.length > 0)) && (
                           <div className="rounded-2xl overflow-hidden border bg-black relative aspect-video shadow-md max-w-2xl mt-2 border-slate-300 dark:border-white/15">
                             <img
-                              src={msg.resultImage || msg.image || "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80"}
-                              alt="Grounded Output Patch"
+                              src={msg.resultImage || msg.image}
+                              alt="Satellite Output Patch"
                               className="w-full h-full object-cover"
                             />
 
+                            {/* Render Bounding Box Overlay ONLY if API returned boxes */}
                             {msg.boxes && msg.boxes.length > 0 && (
                               <svg
                                 className="absolute inset-0 w-full h-full pointer-events-none"
@@ -866,29 +867,32 @@ export default function SatQueryDeepSeekChatPage() {
 
                                   return (
                                     <g key={bIdx}>
+                                      {/* Crisp RED bounding box from API coordinates */}
                                       <rect
                                         x={x1}
                                         y={y1}
                                         width={width}
                                         height={height}
-                                        fill="rgba(59, 130, 246, 0.25)"
-                                        stroke="#3b82f6"
-                                        strokeWidth="2.5"
-                                        strokeDasharray="4 2"
+                                        fill="rgba(239, 68, 68, 0.15)"
+                                        stroke="#ef4444"
+                                        strokeWidth="1.5"
+                                        strokeDasharray="3 1.5"
                                       />
-                                      <foreignObject
-                                        x={x1}
-                                        y={Math.max(0, y1 - 8)}
-                                        width="130"
-                                        height="30"
-                                      >
-                                        <div className="bg-blue-950/90 text-blue-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/50 inline-flex items-center gap-1 shadow-lg font-bold">
-                                          <span>{box.label || "Grounded Region"}</span>
-                                          {box.confidence && (
-                                            <span className="text-cyan-300 font-bold">{box.confidence}%</span>
-                                          )}
-                                        </div>
-                                      </foreignObject>
+                                      {box.label && (
+                                        <foreignObject
+                                          x={x1}
+                                          y={Math.max(0, y1 - 6)}
+                                          width="120"
+                                          height="24"
+                                        >
+                                          <div className="bg-red-950/90 text-red-100 text-[9px] font-mono px-1.5 py-0.5 rounded border border-red-500/60 inline-flex items-center gap-1 shadow-md font-bold whitespace-nowrap">
+                                            <span>{box.label}</span>
+                                            {box.confidence && (
+                                              <span className="text-amber-300 font-bold">{box.confidence}%</span>
+                                            )}
+                                          </div>
+                                        </foreignObject>
+                                      )}
                                     </g>
                                   );
                                 })}
