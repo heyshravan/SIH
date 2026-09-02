@@ -494,14 +494,11 @@ export default function SatQueryDeepSeekChatPage() {
           {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </button>
 
-        {/* Brand Header inside Sidebar */}
+        {/* Brand Header inside Sidebar (Clean Text - Logo Icon Removed) */}
         <div className={`p-3 border-b ${isDark ? "border-white/10" : "border-slate-200"} flex items-center justify-between`}>
-          <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-500/30">
-              <Satellite className="w-4.5 h-4.5" />
-            </div>
+          <Link href="/" className="flex items-center gap-1.5 overflow-hidden px-1">
             {sidebarOpen && (
-              <span className={`font-extrabold text-base tracking-tight whitespace-nowrap ${
+              <span className={`font-extrabold text-lg tracking-tight whitespace-nowrap ${
                 isDark ? "text-white" : "text-slate-900"
               }`}>
                 SatQuery <span className="text-violet-500 text-xs font-mono font-bold">AI</span>
@@ -700,9 +697,6 @@ export default function SatQueryDeepSeekChatPage() {
           </button>
 
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shadow">
-              <Satellite className="w-3.5 h-3.5" />
-            </div>
             <span className="font-extrabold text-sm tracking-tight dark:text-white text-slate-900">
               SatQuery <span className="text-violet-500 font-mono text-xs">AI</span>
             </span>
@@ -719,10 +713,6 @@ export default function SatQueryDeepSeekChatPage() {
         {/* Welcome Empty State Header */}
         {messages.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 py-6 sm:py-12 px-2">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40">
-              <Satellite className="w-7 h-7 sm:w-8 sm:h-8 animate-pulse" />
-            </div>
-
             <h2 className={`text-2xl sm:text-4xl font-extrabold tracking-tight font-sans ${
               isDark ? "text-white" : "text-slate-900"
             }`}>
