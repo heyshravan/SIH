@@ -33,8 +33,11 @@ import {
   Moon,
   Home,
   Menu,
+  AlertCircle,
+  Activity,
 } from "lucide-react";
 import Link from "next/link";
+import { analyzeImage, fetchHealthStatus } from "@/lib/api";
 
 export default function SatQueryDeepSeekChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,18 +48,26 @@ export default function SatQueryDeepSeekChatPage() {
   const [inputQuery, setInputQuery] = useState("");
   const [attachedImage, setAttachedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [backendHealth, setBackendHealth] = useState({ healthy: null, status: "checking" });
 
   const fileInputRef = useRef(null);
   const [activeChatId, setActiveChatId] = useState("chat-1");
 
   useEffect(() => {
-    // Auto-detect mobile screen size on mount and collapse sidebar if on small screen
+    // Auto-detect mobile screen size on mount
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
 
     const isDarkClass = document.documentElement.classList.contains("dark");
     setTheme(isDarkClass ? "dark" : "light");
+
+    // Task 8: Check backend health status on mount
+    const checkHealth = async () => {
+      const res = await fetchHealthStatus();
+      setBackendHealth(res);
+    };
+    checkHealth();
   }, []);
 
   const isDark = theme === "dark";
@@ -143,6 +154,7 @@ export default function SatQueryDeepSeekChatPage() {
     if (file) {
       const imageUrl = URL.createObjectURL(file);
       setAttachedImage({
+        file: file, // Store File object for FormData
         name: file.name,
         url: imageUrl,
       });
@@ -154,6 +166,55 @@ export default function SatQueryDeepSeekChatPage() {
     setInputQuery("");
     setAttachedImage(null);
     setActiveChatId(`chat-${Date.now()}`);
+  };
+
+  const executeQuery = async (queryText, fileObj, sampleImage) => {
+    if (!queryText && !fileObj) return;
+
+    setIsGenerating(true);
+
+    let taskType = "vqa";
+    if (mode === "vision") {
+      taskType = "grounding";
+    } else if (mode === "expert") {
+      taskType = "vqa";
+    }
+
+    const apiRes = await analyzeImage({
+      image: fileObj || null,
+      prompt: queryText || "Analyze satellite imagery.",
+      taskType,
+      mode,
+    });
+
+    if (apiRes.success && apiRes.data) {
+      const backendData = apiRes.data;
+      const assistantMsg = {
+        id: `asst-${Date.now()}`,
+        sender: "assistant",
+        model: backendData.specialist || (mode === "vision" ? "GeoChat Grounding Specialist" : "GeoChat-7B"),
+        task: backendData.task ? backendData.task.toUpperCase() : (mode === "vision" ? "GROUNDING" : "SATELLITE VQA"),
+        confidence: backendData.confidence || null,
+        thinking: backendData.thinking || backendData.reasoning || null,
+        text: backendData.answer || backendData.response || backendData.message || "Analysis complete.",
+        boxes: backendData.boxes || [],
+        resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
+        status: backendData.status || null,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    } else {
+      const errorMsg = {
+        id: `asst-${Date.now()}`,
+        sender: "assistant",
+        model: "SatQuery Agent Controller",
+        task: "ERROR",
+        isError: true,
+        text: apiRes.error || "SatQuery AI backend is currently unavailable. Please try again.",
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    }
+
+    setIsGenerating(false);
   };
 
   const handleSendMessage = () => {
@@ -168,37 +229,25 @@ export default function SatQueryDeepSeekChatPage() {
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setInputQuery("");
     const currentImg = attachedImage;
+    const currentQuery = inputQuery;
+    setInputQuery("");
     setAttachedImage(null);
-    setIsGenerating(true);
 
-    setTimeout(() => {
-      const assistantMsg = {
-        id: `asst-${Date.now()}`,
-        sender: "assistant",
-        model:
-          mode === "vision"
-            ? "GeoChat Grounding Specialist"
-            : mode === "expert"
-            ? "Adapted GeoChat-7B (BigEarthNet QLoRA)"
-            : "SatQuery Instant VQA Model",
-        task: mode === "vision" ? "Object Grounding" : "Satellite Remote Sensing VQA",
-        confidence: 95.4,
-        thinking: `1. Agent Controller analyzed query: "${userMsg.text}".\n2. Modality selected: ${mode.toUpperCase()} mode.\n3. Applied 4-bit NF4 quantized tensor weights.\n4. Grounded spatial features and generated response synthesis.`,
-        text: `Analysis complete for: "${userMsg.text}". Detected key features with strong spatial confidence across the satellite band.`,
-        boxes: currentImg
-          ? [
-              { label: "Target Structure 1", x: 130, y: 90, width: 110, height: 70, score: "95%" },
-              { label: "Target Structure 2", x: 310, y: 190, width: 95, height: 60, score: "93%" },
-            ]
-          : [],
-        resultImage: currentImg ? currentImg.url : presetSamples[0].image,
-      };
+    executeQuery(currentQuery, currentImg?.file, currentImg?.url);
+  };
 
-      setMessages((prev) => [...prev, assistantMsg]);
-      setIsGenerating(false);
-    }, 1200);
+  const handlePresetClick = (sample) => {
+    const userMsg = {
+      id: `user-${Date.now()}`,
+      sender: "user",
+      text: sample.query,
+      image: sample.image,
+      imageName: sample.name,
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    executeQuery(sample.query, null, sample.image);
   };
 
   return (
@@ -222,7 +271,7 @@ export default function SatQueryDeepSeekChatPage() {
         />
       )}
 
-      {/* Left Collapsible Sidebar (Fully Responsive for All Devices) */}
+      {/* Left Collapsible Sidebar */}
       <aside
         className={`${
           sidebarOpen ? "w-64 translate-x-0" : "-translate-x-full md:translate-x-0 md:w-16"
@@ -349,6 +398,22 @@ export default function SatQueryDeepSeekChatPage() {
             </div>
           )}
         </div>
+
+        {/* Live Backend Health Status Badge */}
+        {sidebarOpen && (
+          <div className="px-3 py-2 border-t dark:border-white/10 border-slate-200">
+            <div className="flex items-center gap-2 text-[11px] font-mono font-bold">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  backendHealth.healthy ? "bg-emerald-400 animate-ping" : "bg-rose-500"
+                }`}
+              />
+              <span className={backendHealth.healthy ? "text-emerald-500" : "text-rose-400"}>
+                {backendHealth.healthy ? "FastAPI Backend Online" : "Backend Offline"}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Bottom Navigation Links + Profile Pill & Theme Toggle */}
         <div className={`p-3 border-t ${isDark ? "border-white/10" : "border-slate-200"} space-y-2`}>
@@ -496,10 +561,7 @@ export default function SatQueryDeepSeekChatPage() {
               {presetSamples.map((s, idx) => (
                 <button
                   key={idx}
-                  onClick={() => {
-                    setInputQuery(s.query);
-                    setAttachedImage({ name: s.name, url: s.image });
-                  }}
+                  onClick={() => handlePresetClick(s)}
                   className={`p-3.5 sm:p-4 rounded-2xl border text-left text-xs font-extrabold transition-all hover:scale-102 flex items-center justify-between shadow-lg ${
                     isDark
                       ? "bg-[#141628] hover:bg-[#1e213b] border-violet-500/30 text-white"
@@ -578,14 +640,16 @@ export default function SatQueryDeepSeekChatPage() {
 
                 {msg.sender === "assistant" && (
                   <div className={`rounded-3xl border p-4 sm:p-6 space-y-4 shadow-xl ${
-                    isDark
+                    msg.isError
+                      ? "bg-rose-500/10 border-rose-500/40 text-rose-900 dark:text-rose-200"
+                      : isDark
                       ? "bg-[#141628] border-violet-500/30 text-white"
                       : "bg-white border-slate-300 text-slate-900"
                   }`}>
                     <div className="flex items-center justify-between border-b dark:border-white/10 border-slate-200 pb-4 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="indigo">{msg.model}</Badge>
-                        <Badge variant="success">{msg.confidence}% Confidence</Badge>
+                        <Badge variant={msg.isError ? "danger" : "indigo"}>{msg.model}</Badge>
+                        {msg.confidence && <Badge variant="success">{msg.confidence}% Confidence</Badge>}
                       </div>
                       <span className="text-xs font-mono font-bold text-cyan-600 dark:text-cyan-400">
                         {msg.task}
@@ -607,7 +671,9 @@ export default function SatQueryDeepSeekChatPage() {
                     )}
 
                     <p className={`text-xs sm:text-sm leading-relaxed font-semibold p-3.5 sm:p-4 rounded-2xl border ${
-                      isDark
+                      msg.isError
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-200"
+                        : isDark
                         ? "bg-white/5 border-white/10 text-slate-100"
                         : "bg-slate-50 border-slate-200 text-slate-900"
                     }`}>
@@ -655,10 +721,21 @@ export default function SatQueryDeepSeekChatPage() {
                 )}
               </div>
             ))}
+
+            {/* Task 6: Loading State Banner */}
+            {isGenerating && (
+              <div className="p-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 text-violet-900 dark:text-violet-200 flex items-center justify-between shadow-lg font-semibold text-xs sm:text-sm animate-pulse">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-violet-500 animate-spin" />
+                  <span>Analyzing satellite imagery with GeoChat-7B (Model loading)...</span>
+                </div>
+                <span className="font-mono text-xs text-cyan-500 font-bold hidden sm:inline">POST /api/v1/agent/query</span>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Floating Input Container with [+] Symbol & Paperclip Buttons */}
+        {/* Floating Input Container */}
         <div className="max-w-3xl mx-auto w-full pt-2">
           {attachedImage && (
             <div className={`flex items-center gap-2 p-2.5 rounded-xl max-w-xs text-xs font-extrabold shadow-lg border mb-2 ${
@@ -692,10 +769,10 @@ export default function SatQueryDeepSeekChatPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleSendMessage();
+                  if (!isGenerating) handleSendMessage();
                 }
               }}
-              placeholder="Message SatQuery AI (e.g. 'Ground all ships in Visakhapatnam port', 'Compare T1 vs T2 change')..."
+              placeholder="Message SatQuery AI (e.g. 'What type of land cover is shown in this satellite image?')..."
               className="w-full bg-transparent text-xs sm:text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
             />
 
