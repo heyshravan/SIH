@@ -6,7 +6,6 @@
 const getApiBaseUrl = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   if (envUrl) {
-    // Strip trailing slash if present
     return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
   }
   return 'https://breeding-maria-price-corrected.trycloudflare.com';
@@ -47,6 +46,37 @@ export async function fetchHealthStatus() {
 }
 
 /**
+ * Helper to generate a valid 224x224 3-channel RGB PNG File object.
+ * Used when a text-only query is sent to satisfy FastAPI's required `image: UploadFile = File(...)` field
+ * while ensuring GeoChat's Vision Transformer (CLIP) mean/std normalization succeeds.
+ */
+function createFallbackRGBImageFile() {
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 224;
+    canvas.height = 224;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const grad = ctx.createLinearGradient(0, 0, 224, 224);
+      grad.addColorStop(0, '#1e1b4b');
+      grad.addColorStop(1, '#065f46');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 224, 224);
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    const byteString = atob(dataUrl.split(',')[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: 'image/png' });
+    return new File([blob], 'satellite_patch.png', { type: 'image/png' });
+  }
+  return null;
+}
+
+/**
  * Main Agent Query API
  * POST /api/v1/agent/query
  *
@@ -57,11 +87,23 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
   try {
     const formData = new FormData();
 
-    if (image) {
-      formData.append('image', image);
+    // 1. Image file handling: use user-uploaded File or generate valid 224x224 RGB PNG for FastAPI UploadFile requirement
+    let fileToUpload = null;
+    if (image && image instanceof File) {
+      fileToUpload = image;
+    } else {
+      fileToUpload = createFallbackRGBImageFile();
     }
 
-    formData.append('prompt', prompt || 'Analyze this satellite imagery.');
+    if (fileToUpload) {
+      formData.append('image', fileToUpload);
+    }
+
+    // 2. Prompt text handling
+    const textPrompt = prompt || 'Analyze this satellite imagery.';
+    formData.append('prompt', textPrompt);
+
+    // 3. Task type & Mode parameters
     formData.append('taskType', taskType || 'auto');
     formData.append('mode', mode || 'expert');
 
@@ -71,12 +113,30 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
     });
 
     if (!response.ok) {
+      let errorDetail = `Server returned status code ${response.status}.`;
+      try {
+        const errData = await response.json();
+        if (errData && errData.detail) {
+          if (typeof errData.detail === 'string') {
+            errorDetail = errData.detail;
+          } else if (Array.isArray(errData.detail)) {
+            errorDetail = errData.detail
+              .map((d) => `${d.loc ? d.loc.join('.') : ''}: ${d.msg}`)
+              .join(' | ');
+          }
+        } else if (errData && errData.message) {
+          errorDetail = errData.message;
+        }
+      } catch (e) {
+        // Non-JSON response
+      }
+
       if (response.status === 413) {
         throw new Error('Satellite image file size is too large.');
       } else if (response.status === 500) {
-        throw new Error('SatQuery AI backend processing error. Please try again.');
+        throw new Error(errorDetail || 'SatQuery AI backend processing error. Please try again.');
       } else {
-        throw new Error(`Server returned status code ${response.status}.`);
+        throw new Error(errorDetail);
       }
     }
 
