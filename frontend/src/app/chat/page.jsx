@@ -43,7 +43,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import Link from "next/link";
-import { analyzeImage, fetchHealthStatus } from "@/lib/api";
+import { analyzeImage, fetchHealthStatus, cleanHtmlResponse } from "@/lib/api";
 
 const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
@@ -67,6 +67,42 @@ export default function SatQueryDeepSeekChatPage() {
   ]);
   const [messages, setMessages] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Specialized Model & Remote Sensing Topics
+  const presetSamples = [
+    {
+      id: "grounding",
+      name: "🚢 Ground Harbor Vessels",
+      query: "Locate all cargo ships and harbor buildings in this satellite patch.",
+      image: "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80",
+      taskType: "grounding",
+      mode: "vision",
+    },
+    {
+      id: "change",
+      name: "🔄 Bi-Temporal Urban Change",
+      query: "Compare T1 vs T2 imagery to detect new infrastructure constructions.",
+      image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80",
+      taskType: "change",
+      mode: "expert",
+    },
+    {
+      id: "fusion",
+      name: "🛰️ Optical + SAR Fusion",
+      query: "Fuse Sentinel-1 C-band radar with Sentinel-2 optical bands to penetrate cloud cover.",
+      image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+      taskType: "fusion",
+      mode: "expert",
+    },
+    {
+      id: "vrsbench",
+      name: "📊 VRSBench Benchmark",
+      query: "Run evaluation on VRSBench VQA and spatial grounding test split.",
+      image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+      taskType: "vqa",
+      mode: "expert",
+    },
+  ];
 
   // 1. Load chat sessions from localStorage on mount
   useEffect(() => {
@@ -99,7 +135,12 @@ export default function SatQueryDeepSeekChatPage() {
           setActiveChatId(targetId);
           const activeSession = parsedSessions.find((s) => s.id === targetId);
           if (activeSession) {
-            setMessages(activeSession.messages || []);
+            // Clean any stored HTML tags in messages
+            const cleanedMsgs = (activeSession.messages || []).map((m) => ({
+              ...m,
+              text: cleanHtmlResponse(m.text),
+            }));
+            setMessages(cleanedMsgs);
           }
         }
       }
@@ -124,7 +165,7 @@ export default function SatQueryDeepSeekChatPage() {
         if (h.id === activeChatId) {
           let updatedTitle = h.title;
           if (messages.length > 0 && messages[0].sender === "user") {
-            const firstText = messages[0].text;
+            const firstText = cleanHtmlResponse(messages[0].text);
             updatedTitle = firstText.length > 30 ? firstText.substring(0, 30) + "..." : firstText;
           }
           return { ...h, title: updatedTitle, messages };
@@ -186,29 +227,6 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  const presetSamples = [
-    {
-      name: "🚢 Ground Harbor Vessels",
-      query: "Locate all cargo ships and harbor buildings in this satellite patch.",
-      image: "https://images.unsplash.com/photo-1578637387939-43c525550085?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      name: "🔄 Bi-Temporal Urban Change",
-      query: "Compare T1 vs T2 imagery to detect new infrastructure constructions.",
-      image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      name: "🛰️ Optical + SAR Fusion",
-      query: "Fuse Sentinel-1 C-band radar with Sentinel-2 optical bands to penetrate cloud cover.",
-      image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-    },
-    {
-      name: "📊 VRSBench Benchmark",
-      query: "Run evaluation on VRSBench VQA and spatial grounding test split.",
-      image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-    },
-  ];
-
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -224,7 +242,8 @@ export default function SatQueryDeepSeekChatPage() {
   const handleSwitchChat = (chatId) => {
     setActiveChatId(chatId);
     const targetSession = chatHistories.find((s) => s.id === chatId);
-    setMessages(targetSession ? targetSession.messages || [] : []);
+    const rawMsgs = targetSession ? targetSession.messages || [] : [];
+    setMessages(rawMsgs.map((m) => ({ ...m, text: cleanHtmlResponse(m.text) })));
     setInputQuery("");
     setAttachedImage(null);
   };
@@ -261,7 +280,7 @@ export default function SatQueryDeepSeekChatPage() {
     setChatHistories(updated);
     if (activeChatId === chatId) {
       setActiveChatId(updated[0].id);
-      setMessages(updated[0].messages || []);
+      setMessages((updated[0].messages || []).map((m) => ({ ...m, text: cleanHtmlResponse(m.text) })));
     }
     try {
       localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
@@ -270,35 +289,44 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  const executeQuery = async (queryText, fileObj, sampleImage) => {
+  // Execute query with real taskType routing to FastAPI backend
+  const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
     setIsGenerating(true);
 
-    let taskType = "vqa";
-    if (mode === "vision") {
-      taskType = "grounding";
-    } else if (mode === "expert") {
-      taskType = "vqa";
+    const activeMode = overrideMode || mode;
+    let taskType = overrideTaskType;
+    if (!taskType) {
+      if (activeMode === "vision") {
+        taskType = "grounding";
+      } else if (activeMode === "expert") {
+        taskType = "vqa";
+      } else {
+        taskType = "vqa";
+      }
     }
 
     const apiRes = await analyzeImage({
       image: fileObj || null,
       prompt: queryText || "Analyze satellite imagery.",
       taskType,
-      mode,
+      mode: activeMode,
     });
 
     if (apiRes.success && apiRes.data) {
       const backendData = apiRes.data;
+      const rawAnswer = backendData.answer || backendData.response || backendData.message || "Analysis complete.";
+      const cleanAnswerText = cleanHtmlResponse(rawAnswer);
+
       const assistantMsg = {
         id: `asst-${Date.now()}`,
         sender: "assistant",
-        model: backendData.specialist || (mode === "vision" ? "GeoChat Grounding Specialist" : "GeoChat-7B"),
-        task: backendData.task ? backendData.task.toUpperCase() : (mode === "vision" ? "GROUNDING" : "SATELLITE VQA"),
+        model: backendData.specialist || (activeMode === "vision" ? "GeoChat Grounding Specialist" : "GeoChat-7B"),
+        task: backendData.task ? backendData.task.toUpperCase() : taskType.toUpperCase(),
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
-        text: backendData.answer || backendData.response || backendData.message || "Analysis complete.",
+        text: cleanAnswerText,
         boxes: backendData.boxes || [],
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
@@ -311,7 +339,7 @@ export default function SatQueryDeepSeekChatPage() {
         model: "SatQuery Agent Controller",
         task: "ERROR",
         isError: true,
-        text: apiRes.error || "SatQuery AI backend is currently unavailable. Please try again.",
+        text: cleanHtmlResponse(apiRes.error) || "SatQuery AI backend is currently unavailable. Please try again.",
       };
       setMessages((prev) => [...prev, errorMsg]);
     }
@@ -340,6 +368,10 @@ export default function SatQueryDeepSeekChatPage() {
   };
 
   const handlePresetClick = (sample) => {
+    if (sample.mode) {
+      setMode(sample.mode);
+    }
+
     const userMsg = {
       id: `user-${Date.now()}`,
       sender: "user",
@@ -349,7 +381,7 @@ export default function SatQueryDeepSeekChatPage() {
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    executeQuery(sample.query, null, sample.image);
+    executeQuery(sample.query, null, sample.image, sample.taskType, sample.mode || mode);
   };
 
   return (
@@ -699,7 +731,7 @@ export default function SatQueryDeepSeekChatPage() {
           </div>
         )}
 
-        {/* Messages Thread (Styling Matching User Screenshots 2 & 3) */}
+        {/* Messages Thread (Clean Plain Text & No Attached Filename Badge) */}
         {messages.length > 0 && (
           <div className="flex-1 space-y-4 sm:space-y-6 max-w-4xl mx-auto w-full">
             {/* Mode Switcher Banner */}
@@ -745,16 +777,13 @@ export default function SatQueryDeepSeekChatPage() {
 
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-3">
-                {/* User Message Bubble: Rounded Blue Pill on Right (Matching Screenshot 2 & 3) */}
+                {/* User Message Bubble: Rounded Blue Pill on Right (No Filename Overlay) */}
                 {msg.sender === "user" && (
                   <div className="flex justify-end my-3">
                     <div className="max-w-xl bg-[#0055ff] dark:bg-[#1d4ed8] text-white px-5 py-2.5 rounded-3xl text-sm font-semibold shadow-md space-y-2">
                       {msg.image && (
                         <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
-                          <img src={msg.image} alt="Input" className="w-full h-36 object-cover" />
-                          <div className="bg-black/40 px-3 py-1 text-[11px] font-mono text-cyan-200 truncate font-bold">
-                            📎 {msg.imageName || "Satellite Patch Input"}
-                          </div>
+                          <img src={msg.image} alt="Input Patch" className="w-full h-36 object-cover" />
                         </div>
                       )}
                       <p className="leading-relaxed">{msg.text}</p>
@@ -762,7 +791,7 @@ export default function SatQueryDeepSeekChatPage() {
                   </div>
                 )}
 
-                {/* Assistant Response Layout: Plain Clean Text on Left + Action Icons (Matching Screenshot 3) */}
+                {/* Assistant Response Layout: Clean Plain Text (HTML Sanitized) */}
                 {msg.sender === "assistant" && (
                   <div className="flex flex-col items-start my-4 space-y-3 max-w-3xl">
                     {msg.isError ? (
@@ -789,7 +818,7 @@ export default function SatQueryDeepSeekChatPage() {
                           </div>
                         )}
 
-                        {/* Plain Clean Assistant Answer Text (Matching Screenshot 3) */}
+                        {/* Plain Clean Assistant Answer Text (No Raw HTML Tags) */}
                         <div className={`text-sm sm:text-base leading-relaxed font-normal ${
                           isDark ? "text-slate-100" : "text-slate-900"
                         }`}>
@@ -830,7 +859,7 @@ export default function SatQueryDeepSeekChatPage() {
                           </div>
                         )}
 
-                        {/* Action Icons Row (Matching Screenshot 3) */}
+                        {/* Action Icons Row */}
                         <div className="flex items-center gap-3 pt-1 text-slate-400 dark:text-slate-500">
                           <button onClick={() => navigator.clipboard.writeText(msg.text)} title="Copy" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
                             <Copy className="w-4 h-4" />
@@ -858,7 +887,7 @@ export default function SatQueryDeepSeekChatPage() {
               </div>
             ))}
 
-            {/* Pulsating Loading Indicator Dot on Left (Matching Screenshot 2) */}
+            {/* Pulsating Loading Indicator Dot on Left */}
             {isGenerating && (
               <div className="flex items-center gap-3 my-4 pl-1">
                 <div className="w-3.5 h-3.5 rounded-full bg-blue-500 animate-ping shrink-0" />

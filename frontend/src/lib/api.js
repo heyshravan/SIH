@@ -14,6 +14,21 @@ const getApiBaseUrl = () => {
 export const API_BASE_URL = getApiBaseUrl();
 
 /**
+ * Strip HTML tags (<p>, <div>, etc.) and decode HTML entities from text
+ */
+export function cleanHtmlResponse(text) {
+  if (!text || typeof text !== 'string') return '';
+  let clean = text.replace(/<[^>]*>?/gm, '').trim();
+  clean = clean
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"');
+  return clean;
+}
+
+/**
  * Health Check API
  * GET /api/v1/health
  */
@@ -134,13 +149,22 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
       if (response.status === 413) {
         throw new Error('Satellite image file size is too large.');
       } else if (response.status === 500) {
-        throw new Error(errorDetail || 'SatQuery AI backend processing error. Please try again.');
+        throw new Error(cleanHtmlResponse(errorDetail) || 'SatQuery AI backend processing error. Please try again.');
       } else {
-        throw new Error(errorDetail);
+        throw new Error(cleanHtmlResponse(errorDetail));
       }
     }
 
     const data = await response.json();
+
+    // Clean HTML tags from backend answer
+    if (data && data.answer) {
+      data.answer = cleanHtmlResponse(data.answer);
+    }
+    if (data && data.response) {
+      data.response = cleanHtmlResponse(data.response);
+    }
+
     return {
       success: true,
       data,
@@ -149,7 +173,7 @@ export async function analyzeImage({ image, prompt, taskType = 'auto', mode = 'e
     console.error('SatQuery API Query Error:', error);
     return {
       success: false,
-      error: error.message || 'SatQuery AI backend is currently unavailable. Please try again.',
+      error: cleanHtmlResponse(error.message) || 'SatQuery AI backend is currently unavailable. Please try again.',
     };
   }
 }
