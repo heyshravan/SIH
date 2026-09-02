@@ -800,15 +800,9 @@ function ChatContent() {
           </button>
         </div>
 
-        {/* Welcome Empty State Header (Ultra-Premium Redesign) */}
+        {/* Welcome Empty State Header */}
         {messages.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto text-center space-y-7 py-8 sm:py-14 px-3">
-            {/* Top Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border dark:bg-violet-950/40 dark:border-violet-500/30 bg-violet-50 border-violet-200 text-violet-700 dark:text-violet-300 text-xs font-semibold shadow-inner">
-              <Sparkles className="w-3.5 h-3.5 text-violet-500 animate-pulse" />
-              <span>SatQuery AI v2.5 • Agentic Remote Sensing Intelligence</span>
-            </div>
-
             {/* Glowing Gradient Heading */}
             <h2 className="text-3xl sm:text-5xl font-black tracking-tight font-sans bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-indigo-950 to-violet-800 dark:from-white dark:via-slate-100 dark:to-cyan-300 leading-tight">
               What satellite analysis can I help with today?
