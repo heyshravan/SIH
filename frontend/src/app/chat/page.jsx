@@ -56,6 +56,22 @@ import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlRespon
 const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
 
+/**
+ * Convert a File object into a persistent Base64 Data URL so images don't break when saved in localStorage.
+ */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !(file instanceof File)) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function ChatContent() {
   const searchParams = useSearchParams();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -226,7 +242,7 @@ function ChatContent() {
     }
   };
 
-  const handlePasteEvent = (e) => {
+  const handlePasteEvent = async (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -236,20 +252,20 @@ function ChatContent() {
         const file = item.getAsFile();
         if (file) {
           e.preventDefault();
-          const imageUrl = URL.createObjectURL(file);
+          const base64Url = await fileToBase64(file);
           const fileName = file.name && file.name !== "image.png" ? file.name : `pasted_satellite_${Date.now()}.png`;
           
           if (changeDetectionMode && attachedImage) {
             setAttachedImage2({
               file: file,
               name: `T2_${fileName}`,
-              url: imageUrl,
+              url: base64Url || URL.createObjectURL(file),
             });
           } else {
             setAttachedImage({
               file: file,
               name: fileName,
-              url: imageUrl,
+              url: base64Url || URL.createObjectURL(file),
             });
           }
 
@@ -261,21 +277,23 @@ function ChatContent() {
     }
   };
 
-  const handleFileUpload = (e, isSecond = false) => {
+  const handleFileUpload = async (e, isSecond = false) => {
     const file = e.target.files[0];
     if (file) {
-      const imageUrl = URL.createObjectURL(file);
+      const base64Url = await fileToBase64(file);
+      const displayUrl = base64Url || URL.createObjectURL(file);
+
       if (isSecond) {
         setAttachedImage2({
           file: file,
           name: `T2_${file.name}`,
-          url: imageUrl,
+          url: displayUrl,
         });
       } else {
         setAttachedImage({
           file: file,
           name: file.name,
-          url: imageUrl,
+          url: displayUrl,
         });
       }
     }
@@ -408,12 +426,12 @@ function ChatContent() {
     // Determine output display image URLs
     let resultImgUrl = displayImageUrl;
     if (!resultImgUrl && fileObj) {
-      resultImgUrl = URL.createObjectURL(fileObj);
+      resultImgUrl = await fileToBase64(fileObj) || URL.createObjectURL(fileObj);
     }
 
     let resultImgUrl2 = displayImageUrl2;
     if (!resultImgUrl2 && fileObj2) {
-      resultImgUrl2 = URL.createObjectURL(fileObj2);
+      resultImgUrl2 = await fileToBase64(fileObj2) || URL.createObjectURL(fileObj2);
     }
 
     if (apiRes.success && apiRes.data) {
@@ -479,15 +497,28 @@ function ChatContent() {
     executeQuery(targetQuery, attachedImage?.file || null, targetImage);
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputQuery.trim() && !attachedImage) return;
+
+    let img1Url = attachedImage ? attachedImage.url : null;
+    let img2Url = attachedImage2 ? attachedImage2.url : null;
+
+    if (attachedImage && attachedImage.file && (!img1Url || img1Url.startsWith("blob:"))) {
+      const b64 = await fileToBase64(attachedImage.file);
+      if (b64) img1Url = b64;
+    }
+
+    if (attachedImage2 && attachedImage2.file && (!img2Url || img2Url.startsWith("blob:"))) {
+      const b64_2 = await fileToBase64(attachedImage2.file);
+      if (b64_2) img2Url = b64_2;
+    }
 
     const userMsg = {
       id: `user-${Date.now()}`,
       sender: "user",
       text: inputQuery || (changeDetectionMode ? "Compare T1 (Before) vs T2 (After) patches for change detection." : "Analyze attached satellite imagery."),
-      image: attachedImage ? attachedImage.url : null,
-      image2: attachedImage2 ? attachedImage2.url : null,
+      image: img1Url,
+      image2: img2Url,
       imageName: attachedImage ? attachedImage.name : null,
     };
 
@@ -503,11 +534,11 @@ function ChatContent() {
     executeQuery(
       currentQuery,
       currentImg?.file,
-      currentImg?.url,
+      img1Url,
       changeDetectionMode ? "change" : null,
       mode,
       currentImg2?.file,
-      currentImg2?.url
+      img2Url
     );
   };
 
@@ -938,14 +969,28 @@ function ChatContent() {
                     <div className="max-w-xl bg-[#0055ff] dark:bg-[#1d4ed8] text-white px-5 py-2.5 rounded-3xl text-sm font-semibold shadow-md space-y-2">
                       <div className="flex items-center gap-2">
                         {msg.image && (
-                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
-                            <img src={msg.image} alt="T1 Before Patch" className="w-full h-36 object-cover" />
+                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2 relative bg-slate-900">
+                            <img
+                              src={msg.image}
+                              alt="T1 Satellite Patch"
+                              className="w-full h-36 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
                             <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T1 (Before)</span>
                           </div>
                         )}
                         {msg.image2 && (
-                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2">
-                            <img src={msg.image2} alt="T2 After Patch" className="w-full h-36 object-cover" />
+                          <div className="rounded-2xl overflow-hidden max-w-xs border border-white/20 mb-2 relative bg-slate-900">
+                            <img
+                              src={msg.image2}
+                              alt="T2 Satellite Patch"
+                              className="w-full h-36 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
                             <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T2 (After)</span>
                           </div>
                         )}
@@ -1009,6 +1054,9 @@ function ChatContent() {
                                   src={msg.resultImage}
                                   alt="T1 Satellite Output Patch"
                                   className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
                                 />
                                 {msg.boxes && msg.boxes.length > 0 && (
                                   <svg
@@ -1050,6 +1098,9 @@ function ChatContent() {
                                   src={msg.resultImage2}
                                   alt="T2 Satellite Output Patch"
                                   className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
                                 />
                               </div>
                             )}
