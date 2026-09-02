@@ -57,17 +57,63 @@ const STORAGE_KEY_SESSIONS = "satquery_chat_sessions_v1";
 const STORAGE_KEY_ACTIVE_ID = "satquery_active_chat_id_v1";
 
 /**
- * Convert a File object into a persistent Base64 Data URL so images don't break when saved in localStorage.
+ * Downscale & compress a Base64 image to prevent localStorage QuotaExceededError (~20KB size)
+ */
+function compressBase64Image(base64Str, maxWidth = 360, maxQuality = 0.65) {
+  return new Promise((resolve) => {
+    if (!base64Str || typeof base64Str !== "string") {
+      resolve(base64Str);
+      return;
+    }
+    if (typeof window === "undefined" || !base64Str.startsWith("data:image")) {
+      resolve(base64Str);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", maxQuality);
+        resolve(compressedDataUrl);
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => resolve(base64Str);
+    img.src = base64Str;
+  });
+}
+
+/**
+ * Convert a File object into a compressed Base64 Data URL so images don't exceed localStorage quota.
  */
 function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!file || !(file instanceof File)) {
       resolve(null);
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = (error) => reject(error);
+    reader.onload = async () => {
+      const rawBase64 = reader.result;
+      const compressed = await compressBase64Image(rawBase64, 360, 0.65);
+      resolve(compressed || rawBase64);
+    };
+    reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
   });
 }
@@ -92,9 +138,43 @@ function generateFallbackRGBBase64() {
       ctx.textAlign = "center";
       ctx.fillText("Satellite Patch", 112, 112);
     }
-    return canvas.toDataURL("image/png");
+    return canvas.toDataURL("image/jpeg", 0.6);
   }
   return null;
+}
+
+/**
+ * Safely persist chat sessions to localStorage without throwing QuotaExceededError
+ */
+function safeSaveSessions(sessions, activeId) {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activeId);
+    localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
+  } catch (e) {
+    if (e.name === "QuotaExceededError" || e.code === 22 || e.number === -2147024882) {
+      console.warn("localStorage quota exceeded. Auto-pruning heavy image payloads from stored sessions...");
+      try {
+        // Prune image strings in older messages to reduce payload size to < 200KB
+        const pruned = sessions.map((s) => ({
+          ...s,
+          messages: (s.messages || []).slice(-15).map((m) => ({
+            ...m,
+            image: m.image && m.image.length > 50000 ? generateFallbackRGBBase64() : m.image,
+            image2: m.image2 && m.image2.length > 50000 ? generateFallbackRGBBase64() : m.image2,
+            resultImage: m.resultImage && m.resultImage.length > 50000 ? generateFallbackRGBBase64() : m.resultImage,
+            resultImage2: m.resultImage2 && m.resultImage2.length > 50000 ? generateFallbackRGBBase64() : m.resultImage2,
+          })),
+        }));
+        localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(pruned));
+      } catch (err) {
+        console.error("Critical: Storage quota full after pruning:", err);
+      }
+    } else {
+      console.error("localStorage save error:", e);
+    }
+  }
 }
 
 function ChatContent() {
@@ -222,29 +302,24 @@ function ChatContent() {
     };
   }, [searchParams]);
 
-  // 2. Save active session messages to localStorage whenever messages or activeChatId changes
+  // 2. Save active session messages to localStorage safely whenever messages or activeChatId changes
   useEffect(() => {
     if (!isInitialized) return;
 
-    try {
-      const updatedHistories = chatHistories.map((h) => {
-        if (h.id === activeChatId) {
-          let updatedTitle = h.title;
-          if (messages.length > 0 && messages[0].sender === "user") {
-            const firstText = cleanHtmlResponse(messages[0].text);
-            updatedTitle = firstText.length > 30 ? firstText.substring(0, 30) + "..." : firstText;
-          }
-          return { ...h, title: updatedTitle, messages };
+    const updatedHistories = chatHistories.map((h) => {
+      if (h.id === activeChatId) {
+        let updatedTitle = h.title;
+        if (messages.length > 0 && messages[0].sender === "user") {
+          const firstText = cleanHtmlResponse(messages[0].text);
+          updatedTitle = firstText.length > 30 ? firstText.substring(0, 30) + "..." : firstText;
         }
-        return h;
-      });
+        return { ...h, title: updatedTitle, messages };
+      }
+      return h;
+    });
 
-      setChatHistories(updatedHistories);
-      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updatedHistories));
-      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, activeChatId);
-    } catch (e) {
-      console.error("Failed to save chat sessions to localStorage:", e);
-    }
+    setChatHistories(updatedHistories);
+    safeSaveSessions(updatedHistories, activeChatId);
   }, [messages, activeChatId, isInitialized]);
 
   const isDark = theme === "dark";
@@ -348,12 +423,7 @@ function ChatContent() {
     setInputQuery("");
     setAttachedImage(null);
     setAttachedImage2(null);
-    try {
-      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
-      localStorage.setItem(STORAGE_KEY_ACTIVE_ID, newId);
-    } catch (e) {
-      console.error("Failed to save new chat to localStorage:", e);
-    }
+    safeSaveSessions(updated, newId);
   };
 
   const handleDeleteChat = (e, chatId) => {
@@ -368,11 +438,7 @@ function ChatContent() {
       setActiveChatId(updated[0].id);
       setMessages((updated[0].messages || []).map((m) => ({ ...m, text: cleanHtmlResponse(m.text) })));
     }
-    try {
-      localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(updated));
-    } catch (err) {
-      console.error(err);
-    }
+    safeSaveSessions(updated, activeChatId);
   };
 
   // Stop / Cancel active query execution
@@ -459,7 +525,7 @@ function ChatContent() {
       return;
     }
 
-    // Determine output display image URLs (Base64 guaranteed)
+    // Determine output display image URLs (Base64 guaranteed & compressed)
     let resultImgUrl = displayImageUrl;
     if (!resultImgUrl && fileObj) {
       resultImgUrl = await fileToBase64(fileObj);
