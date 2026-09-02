@@ -284,7 +284,7 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query with GeoChat Coordinate Token Parsing
+  // Execute query with GeoChat Coordinate Token & Spatial Inference Parsing
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
@@ -321,13 +321,13 @@ export default function SatQueryDeepSeekChatPage() {
       const backendData = apiRes.data;
       let rawAnswer = backendData.answer || backendData.response || backendData.message || "";
       
-      // Parse raw GeoChat coordinate tokens like {<40><55><52><59>|<90>}
-      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer);
+      // Parse raw GeoChat coordinate tokens OR infer spatial description boxes
+      const { cleanText, parsedBoxes } = parseGeoChatBoxes(rawAnswer, queryText);
 
-      // Combine backend boxes with parsed coordinate token boxes
+      // Combine backend boxes with parsed coordinate token & spatial description boxes
       const finalBoxes = [...(backendData.boxes || []), ...parsedBoxes];
 
-      let cleanAnswerText = cleanHtmlResponse(cleanText);
+      let cleanAnswerText = cleanHtmlResponse(cleanText || rawAnswer);
       if (!cleanAnswerText) {
         if (finalBoxes.length > 0) {
           cleanAnswerText = `Spatial grounding detected ${finalBoxes.length} target region${finalBoxes.length > 1 ? "s" : ""}.`;
@@ -344,7 +344,7 @@ export default function SatQueryDeepSeekChatPage() {
         confidence: backendData.confidence || null,
         thinking: backendData.thinking || backendData.reasoning || null,
         text: cleanAnswerText,
-        boxes: finalBoxes, // Parsed & Backend boxes
+        boxes: finalBoxes,
         resultImage: sampleImage || (fileObj ? URL.createObjectURL(fileObj) : null),
         status: backendData.status || null,
       };
