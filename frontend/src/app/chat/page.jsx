@@ -41,7 +41,8 @@ import {
   ThumbsDown,
   Share2,
   MoreHorizontal,
-  RefreshCw,
+  Square,
+  StopCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, analyzeGroundingImage, fetchHealthStatus, cleanHtmlResponse, parseGeoChatBoxes } from "@/lib/api";
@@ -62,6 +63,8 @@ export default function SatQueryDeepSeekChatPage() {
   const [pasteNotification, setPasteNotification] = useState(false);
 
   const fileInputRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
   const [activeChatId, setActiveChatId] = useState("chat-1");
   const [chatHistories, setChatHistories] = useState([
     { id: "chat-1", title: "New Satellite Analysis", date: "Today", messages: [] },
@@ -281,11 +284,21 @@ export default function SatQueryDeepSeekChatPage() {
     }
   };
 
-  // Execute query passing AgentThink and Earth Search flags to API
+  // Stop / Cancel active query execution
+  const handleStopQuery = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsGenerating(false);
+  };
+
+  // Execute query passing AbortSignal to enable Stop functionality
   const executeQuery = async (queryText, fileObj, sampleImage, overrideTaskType, overrideMode) => {
     if (!queryText && !fileObj) return;
 
     setIsGenerating(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     const activeMode = overrideMode || mode;
     let taskType = overrideTaskType;
@@ -306,6 +319,7 @@ export default function SatQueryDeepSeekChatPage() {
         prompt: queryText || "Locate target objects in this satellite image.",
         agentThink,
         earthSearch,
+        signal: controller.signal,
       });
     } else {
       apiRes = await analyzeImage({
@@ -315,7 +329,22 @@ export default function SatQueryDeepSeekChatPage() {
         mode: activeMode,
         agentThink,
         earthSearch,
+        signal: controller.signal,
       });
+    }
+
+    if (apiRes.aborted) {
+      const stoppedMsg = {
+        id: `asst-${Date.now()}`,
+        sender: "assistant",
+        model: "SatQuery Agent Controller",
+        task: "STOPPED",
+        isError: true,
+        text: "Query processing stopped by user.",
+      };
+      setMessages((prev) => [...prev, stoppedMsg]);
+      setIsGenerating(false);
+      return;
     }
 
     if (apiRes.success && apiRes.data) {
@@ -398,15 +427,12 @@ export default function SatQueryDeepSeekChatPage() {
     executeQuery(currentQuery, currentImg?.file, currentImg?.url);
   };
 
-  // Preset topic selection populates the prompt query & opens file browser for image attachment
   const handlePresetClick = (sample) => {
     if (sample.mode) {
       setMode(sample.mode);
     }
-    // Populate query into input box
     setInputQuery(sample.query);
 
-    // If user has not attached an image yet, open file input selector
     if (!attachedImage && fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -951,11 +977,22 @@ export default function SatQueryDeepSeekChatPage() {
               </div>
             ))}
 
-            {/* Pulsating Loading Indicator Dot on Left */}
+            {/* Pulsating Loading Indicator Dot on Left with Stop Button */}
             {isGenerating && (
-              <div className="flex items-center gap-3 my-4 pl-1">
-                <div className="w-3.5 h-3.5 rounded-full bg-blue-500 animate-ping shrink-0" />
-                <span className="text-xs font-mono font-bold text-slate-400">Processing satellite query...</span>
+              <div className="flex items-center justify-between p-3 rounded-2xl dark:bg-white/5 bg-slate-100 border dark:border-white/10 border-slate-200 max-w-md my-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-3.5 h-3.5 rounded-full bg-violet-500 animate-ping shrink-0" />
+                  <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
+                    Processing satellite query...
+                  </span>
+                </div>
+                <button
+                  onClick={handleStopQuery}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md transition-all hover:scale-105 active:scale-95"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                  <span>Stop</span>
+                </button>
               </div>
             )}
           </div>
@@ -1031,7 +1068,7 @@ export default function SatQueryDeepSeekChatPage() {
                 </button>
               </div>
 
-              {/* Action Buttons: (+) Plus Add Symbol, (📎) Paperclip Attachment, (↑) Send Arrow */}
+              {/* Action Buttons: (+) Add Symbol, (📎) Paperclip Attachment, (↑) Send Arrow or (⏹) Stop Button */}
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -1049,17 +1086,23 @@ export default function SatQueryDeepSeekChatPage() {
                   <Paperclip className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </button>
 
-                <button
-                  onClick={handleSendMessage}
-                  disabled={isGenerating || (!inputQuery.trim() && !attachedImage)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-40"
-                >
-                  {isGenerating ? (
-                    <Sparkles className="w-4 h-4 animate-spin" />
-                  ) : (
+                {isGenerating ? (
+                  <button
+                    onClick={handleStopQuery}
+                    title="Stop Query Generation"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/30 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!inputQuery.trim() && !attachedImage}
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 transition-all disabled:opacity-40"
+                  >
                     <ArrowUp className="w-4 h-4 stroke-[3]" />
-                  )}
-                </button>
+                  </button>
+                )}
               </div>
             </div>
           </div>

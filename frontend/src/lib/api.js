@@ -152,7 +152,7 @@ function createFallbackRGBImageFile() {
 /**
  * Main Agent Query API (VQA & General Queries)
  * POST /api/v1/agent/query
- * Passes agentThink and earthSearch parameters to FastAPI backend
+ * Supports AbortSignal to cancel active requests
  */
 export async function analyzeImage({
   image,
@@ -161,6 +161,7 @@ export async function analyzeImage({
   mode = 'expert',
   agentThink = true,
   earthSearch = false,
+  signal = null,
 }) {
   try {
     const formData = new FormData();
@@ -188,6 +189,7 @@ export async function analyzeImage({
     const response = await fetch(`${API_BASE_URL}/api/v1/agent/query`, {
       method: 'POST',
       body: formData,
+      signal,
     });
 
     if (!response.ok) {
@@ -232,6 +234,13 @@ export async function analyzeImage({
       data,
     };
   } catch (error) {
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        aborted: true,
+        error: 'Query processing stopped by user.',
+      };
+    }
     console.error('SatQuery API Query Error:', error);
     return {
       success: false,
@@ -243,13 +252,14 @@ export async function analyzeImage({
 /**
  * Real GeoChat Grounding API
  * POST /api/v1/models/geochat/grounding
- * Ensures a valid File is attached (user file or fallback image) to avoid body.image required error
+ * Supports AbortSignal to cancel active requests
  */
 export async function analyzeGroundingImage({
   image,
   prompt,
   agentThink = true,
   earthSearch = false,
+  signal = null,
 }) {
   try {
     const formData = new FormData();
@@ -272,6 +282,7 @@ export async function analyzeGroundingImage({
     const response = await fetch(`${API_BASE_URL}/api/v1/models/geochat/grounding`, {
       method: 'POST',
       body: formData,
+      signal,
     });
 
     if (!response.ok) {
@@ -306,6 +317,13 @@ export async function analyzeGroundingImage({
       data,
     };
   } catch (error) {
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        aborted: true,
+        error: 'Grounding query processing stopped by user.',
+      };
+    }
     console.error('SatQuery Grounding API Error:', error);
     return {
       success: false,
