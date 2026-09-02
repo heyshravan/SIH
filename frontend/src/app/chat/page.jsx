@@ -35,6 +35,7 @@ import {
   Menu,
   AlertCircle,
   Activity,
+  ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { analyzeImage, fetchHealthStatus } from "@/lib/api";
@@ -49,9 +50,36 @@ export default function SatQueryDeepSeekChatPage() {
   const [attachedImage, setAttachedImage] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [backendHealth, setBackendHealth] = useState({ healthy: null, status: "checking" });
+  const [pasteNotification, setPasteNotification] = useState(false);
 
   const fileInputRef = useRef(null);
   const [activeChatId, setActiveChatId] = useState("chat-1");
+
+  // Clipboard Paste Image Listener for Ctrl+V
+  const handlePasteEvent = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf("image") !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const imageUrl = URL.createObjectURL(file);
+          const fileName = file.name && file.name !== "image.png" ? file.name : `pasted_satellite_${Date.now()}.png`;
+          setAttachedImage({
+            file: file,
+            name: fileName,
+            url: imageUrl,
+          });
+          setPasteNotification(true);
+          setTimeout(() => setPasteNotification(false), 3000);
+          break;
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     // Auto-detect mobile screen size on mount
@@ -68,6 +96,12 @@ export default function SatQueryDeepSeekChatPage() {
       setBackendHealth(res);
     };
     checkHealth();
+
+    // Attach global clipboard paste listener for Ctrl+V image pastes
+    window.addEventListener("paste", handlePasteEvent);
+    return () => {
+      window.removeEventListener("paste", handlePasteEvent);
+    };
   }, []);
 
   const isDark = theme === "dark";
@@ -222,9 +256,12 @@ export default function SatQueryDeepSeekChatPage() {
   };
 
   return (
-    <div className={`flex h-screen w-full overflow-hidden select-none transition-colors duration-300 relative ${
-      isDark ? "bg-[#070810] text-slate-100" : "bg-slate-50 text-slate-900"
-    }`}>
+    <div
+      onPaste={handlePasteEvent}
+      className={`flex h-screen w-full overflow-hidden select-none transition-colors duration-300 relative ${
+        isDark ? "bg-[#070810] text-slate-100" : "bg-slate-50 text-slate-900"
+      }`}
+    >
       {/* Hidden File Input */}
       <input
         type="file"
@@ -233,6 +270,14 @@ export default function SatQueryDeepSeekChatPage() {
         accept="image/*"
         className="hidden"
       />
+
+      {/* Clipboard Image Paste Notification Toast */}
+      {pasteNotification && (
+        <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-2xl bg-emerald-500 text-white font-extrabold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
+          <ClipboardCheck className="w-4 h-4 text-white" />
+          <span>Satellite image pasted from clipboard!</span>
+        </div>
+      )}
 
       {/* Mobile Drawer Backdrop overlay */}
       {sidebarOpen && (
@@ -727,7 +772,7 @@ export default function SatQueryDeepSeekChatPage() {
             </div>
           )}
 
-          {/* DeepSeek Floating Textarea Container */}
+          {/* DeepSeek Floating Textarea Container with Clipboard Paste Handler */}
           <div className={`rounded-3xl p-3 sm:p-4 shadow-2xl border transition-colors space-y-3 ${
             isDark
               ? "bg-[#141628] border-violet-500/40 text-white"
@@ -737,13 +782,14 @@ export default function SatQueryDeepSeekChatPage() {
               rows={2}
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
+              onPaste={handlePasteEvent}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   if (!isGenerating) handleSendMessage();
                 }
               }}
-              placeholder="Message SatQuery AI (e.g. 'What type of land cover is shown in this satellite image?')..."
+              placeholder="Message SatQuery AI or paste a satellite image from clipboard (Ctrl + V)..."
               className="w-full bg-transparent text-xs sm:text-sm font-semibold placeholder-slate-400 focus:outline-none resize-none px-2 dark:text-white text-slate-900"
             />
 
@@ -787,7 +833,7 @@ export default function SatQueryDeepSeekChatPage() {
 
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  title="Attach File"
+                  title="Attach File or Paste from Clipboard"
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-full dark:bg-white/10 dark:hover:bg-white/20 dark:text-white bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
                 >
                   <Paperclip className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
