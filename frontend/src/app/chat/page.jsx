@@ -72,6 +72,31 @@ function fileToBase64(file) {
   });
 }
 
+/**
+ * Generate a 224x224 RGB PNG Base64 string for fallback image storage in chat history.
+ */
+function generateFallbackRGBBase64() {
+  if (typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    canvas.width = 224;
+    canvas.height = 224;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const grad = ctx.createLinearGradient(0, 0, 224, 224);
+      grad.addColorStop(0, "#1e1b4b");
+      grad.addColorStop(1, "#065f46");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 224, 224);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 14px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("Satellite Patch", 112, 112);
+    }
+    return canvas.toDataURL("image/png");
+  }
+  return null;
+}
+
 function ChatContent() {
   const searchParams = useSearchParams();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -259,13 +284,13 @@ function ChatContent() {
             setAttachedImage2({
               file: file,
               name: `T2_${fileName}`,
-              url: base64Url || URL.createObjectURL(file),
+              url: base64Url,
             });
           } else {
             setAttachedImage({
               file: file,
               name: fileName,
-              url: base64Url || URL.createObjectURL(file),
+              url: base64Url,
             });
           }
 
@@ -281,19 +306,18 @@ function ChatContent() {
     const file = e.target.files[0];
     if (file) {
       const base64Url = await fileToBase64(file);
-      const displayUrl = base64Url || URL.createObjectURL(file);
 
       if (isSecond) {
         setAttachedImage2({
           file: file,
           name: `T2_${file.name}`,
-          url: displayUrl,
+          url: base64Url,
         });
       } else {
         setAttachedImage({
           file: file,
           name: file.name,
-          url: displayUrl,
+          url: base64Url,
         });
       }
     }
@@ -423,15 +447,18 @@ function ChatContent() {
       return;
     }
 
-    // Determine output display image URLs
+    // Determine output display image URLs (Base64 guaranteed)
     let resultImgUrl = displayImageUrl;
     if (!resultImgUrl && fileObj) {
-      resultImgUrl = await fileToBase64(fileObj) || URL.createObjectURL(fileObj);
+      resultImgUrl = await fileToBase64(fileObj);
+    }
+    if (!resultImgUrl) {
+      resultImgUrl = generateFallbackRGBBase64();
     }
 
     let resultImgUrl2 = displayImageUrl2;
     if (!resultImgUrl2 && fileObj2) {
-      resultImgUrl2 = await fileToBase64(fileObj2) || URL.createObjectURL(fileObj2);
+      resultImgUrl2 = await fileToBase64(fileObj2);
     }
 
     if (apiRes.success && apiRes.data) {
@@ -511,6 +538,10 @@ function ChatContent() {
     if (attachedImage2 && attachedImage2.file && (!img2Url || img2Url.startsWith("blob:"))) {
       const b64_2 = await fileToBase64(attachedImage2.file);
       if (b64_2) img2Url = b64_2;
+    }
+
+    if (!img1Url) {
+      img1Url = generateFallbackRGBBase64();
     }
 
     const userMsg = {
@@ -974,9 +1005,6 @@ function ChatContent() {
                               src={msg.image}
                               alt="T1 Satellite Patch"
                               className="w-full h-36 object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
                             />
                             <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T1 (Before)</span>
                           </div>
@@ -987,9 +1015,6 @@ function ChatContent() {
                               src={msg.image2}
                               alt="T2 Satellite Patch"
                               className="w-full h-36 object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
                             />
                             <span className="block text-[10px] font-mono text-center bg-black/60 text-white py-0.5">T2 (After)</span>
                           </div>
@@ -1054,9 +1079,6 @@ function ChatContent() {
                                   src={msg.resultImage}
                                   alt="T1 Satellite Output Patch"
                                   className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
                                 />
                                 {msg.boxes && msg.boxes.length > 0 && (
                                   <svg
@@ -1098,9 +1120,6 @@ function ChatContent() {
                                   src={msg.resultImage2}
                                   alt="T2 Satellite Output Patch"
                                   className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
                                 />
                               </div>
                             )}
